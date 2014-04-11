@@ -22,7 +22,7 @@ class ZfecFs(Fuse):
 
         Fuse.__init__(self, *args, **kw)
 
-        self.root = '/'
+        self.source = '/'
         self.shares = 20
         self.required = 3
 
@@ -40,7 +40,7 @@ class ZfecFs(Fuse):
         if len(parts) == 0: return (-1, '/')
         index = self.decode_storage_index(parts[0])
         if index is None: return (None, None)
-        return (index, self.root + '/'.join(parts[1:]))
+        return (index, self.source + '/'.join(parts[1:]))
 
     def modified_file_stat(self, stat):
         # divide by self.required, round up and add metadata length
@@ -93,7 +93,7 @@ class ZfecFs(Fuse):
             return -EACCES
 
     def statfs(self):
-        return os.statvfs(self.root)
+        return os.statvfs(self.source)
 
     def main(self, *a, **kw):
         self.file_class = self.ZfecFile
@@ -198,8 +198,8 @@ on a certain directory hierarchy.""" + Fuse.fusage
 
     server.multithreaded = False
 
-    server.parser.add_option(mountopt="root", metavar="PATH",
-                             default=server.root,
+    server.parser.add_option(mountopt="source", metavar="PATH",
+                             default=server.source,
                              help="provide shared view for filesystem from " +
                                   "under PATH [default: %default]")
     server.parser.add_option(mountopt="required", metavar="REQUIRED",
@@ -215,9 +215,9 @@ on a certain directory hierarchy.""" + Fuse.fusage
 
     try:
         if server.fuse_args.mount_expected():
-            os.chdir(server.root)
+            os.chdir(server.source)
     except OSError:
-        print >> sys.stderr, "can't enter root of underlying filesystem"
+        print >> sys.stderr, "can't enter root of source filesystem"
         sys.exit(1)
 
     server.main()
