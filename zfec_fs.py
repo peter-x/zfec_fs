@@ -126,9 +126,8 @@ class ZfecFs(Fuse):
             data = self.file.read(length * req)
             data = self._correct_datasize(data, offset * req)
 
-            parts = tuple(''.join(c for (i, c) in enumerate(data)
-                                               if i % req == p)
-                                 for p in range(req))
+            parts = tuple(data[p:len(data):req] for p in range(req))
+
             global server
             return server.encoder.encode(parts, (self.index,))[0]
 
