@@ -45,14 +45,14 @@ class ZfecFs(Fuse):
     def getattr(self, path):
         index, path = self.decode_path(path)
         if index is None:
-            return -EINVAL
+            return -ENOENT
         else:
             return os.lstat(path)
 
     def readlink(self, path):
         index, path = self.decode_path(path)
         if index is None:
-            return -EINVAL
+            return -ENOENT
         else:
             return os.readlink(path)
 
@@ -70,14 +70,14 @@ class ZfecFs(Fuse):
     def utime(self, path, times):
         index, path = self.decode_path(path)
         if index is None:
-            return -EINVAL
+            return -ENOENT
         else:
             return os.utime(path, times)
 
     def access(self, path, mode):
         index, path = self.decode_path(path)
         if index is None:
-            return -EINVAL
+            return -ENOENT
         elif not os.access(path, mode):
             return -EACCES
 
