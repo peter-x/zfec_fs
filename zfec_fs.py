@@ -42,6 +42,15 @@ class ZfecFs(Fuse):
         if index is None: return (None, None)
         return (index, self.root + '/'.join(parts[1:]))
 
+    def modified_file_stat(self, stat):
+        # divide by self.required, round up and add metadata length
+        size = (stat.st_size + self.required - 1) // self.required + \
+               ZfecFs.METADATA_LENGTH
+        return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
+                               stat.st_nlink, stat.st_uid, stat.st_gid,
+                               size,
+                               stat.st_atime, stat.st_mtime, stat.st_ctime))
+
     # fuse filesystem functions
 
     def getattr(self, path):
@@ -49,14 +58,7 @@ class ZfecFs(Fuse):
         if index is None:
             return -ENOENT
         else:
-            stat = os.lstat(path)
-            # divide by self.required, round up and add metadata length
-            size = (stat.st_size + self.required - 1) // self.required + \
-                   ZfecFs.METADATA_LENGTH
-            return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
-                                   stat.st_nlink, stat.st_uid, stat.st_gid,
-                                   size,
-                                   stat.st_atime, stat.st_mtime, stat.st_ctime))
+            return self.modified_file_stat(os.lstat(path))
 
     def readlink(self, path):
         index, path = self.decode_path(path)
@@ -163,7 +165,8 @@ class ZfecFs(Fuse):
             os.close(os.dup(self.fd))
 
         def fgetattr(self):
-            return os.fstat(self.fd)
+            global server
+            return server.modified_file_stat(os.fstat(self.fd))
 
         def lock(self, cmd, owner, **kw):
             op = { fcntl.F_UNLCK : fcntl.LOCK_UN,
