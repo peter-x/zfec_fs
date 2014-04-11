@@ -16,6 +16,8 @@ fuse.feature_assert('stateful_files')
 
 class ZfecFs(Fuse):
 
+    METADATA_LENGTH = 3
+
     def __init__(self, *args, **kw):
 
         Fuse.__init__(self, *args, **kw)
@@ -47,7 +49,14 @@ class ZfecFs(Fuse):
         if index is None:
             return -ENOENT
         else:
-            return os.lstat(path)
+            stat = os.lstat(path)
+            # divide by self.required, round up and add metadata length
+            size = (stat.st_size + self.required - 1) // self.required + \
+                   ZfecFs.METADATA_LENGTH
+            return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
+                                   stat.st_nlink, stat.st_uid, stat.st_gid,
+                                   size,
+                                   stat.st_atime, stat.st_mtime, stat.st_ctime))
 
     def readlink(self, path):
         index, path = self.decode_path(path)
@@ -106,14 +115,16 @@ class ZfecFs(Fuse):
             self.file = os.fdopen(self.fd, 'r')
             self.direct_io = False
 
+        def _filesize(self):
+            self.file.seek(0, os.SEEK_END)
+            return self.file.tell()
+
         def _correct_datasize(self, data, fileoffset):
             excess = len(data) % self.required
             if excess == 0:
                 return data
             # short read, check whether we are at the end of the file
-            self.file.seek(0, os.SEEK_END)
-            filesize = self.file.tell()
-            if fileoffset + len(data) < filesize:
+            if fileoffset + len(data) < self._filesize():
                 # end of file not reached, just remove excess bytes
                 return data[:-excess]
             else:
@@ -121,6 +132,20 @@ class ZfecFs(Fuse):
                 return data + '\0' * (self.required - excess)
 
         def read(self, length, offset):
+            metadata_part = min(ZfecFs.METADATA_LENGTH - offset, length)
+            if metadata_part > 0:
+                return self._read_metadata(metadata_part, offset) + \
+                       self._read_data(length - metadata_part, 0)
+            else:
+                return self._read_data(length, offset - ZfecFs.METADATA_LENGTH)
+
+        def _read_metadata(self, length, offset):
+            if length <= 0: return ''
+            metadata = chr(self.required) + chr(self.index) + \
+                       chr(self._filesize() % self.required)
+            return metadata[offset:offset + length]
+
+        def _read_data(self, length, offset):
             req = self.required
             self.file.seek(offset * req)
             data = self.file.read(length * req)
