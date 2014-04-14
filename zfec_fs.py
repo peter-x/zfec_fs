@@ -343,18 +343,7 @@ class ZfecFs(Fuse):
                 return decoded
 
         def _transpose(self, data):
-            # TODO optimize this
-            def gen(data):
-                num = len(data)
-                l = len(data[0])
-                pos = 0
-                while pos < l:
-                    i = 0
-                    while i < num:
-                        yield data[i][pos]
-                        i += 1
-                    pos += 1
-            return ''.join(gen(data))
+            return ''.join(''.join(x) for x in zip(*data))
 
         def release(self, flags):
             for f in self.files:
