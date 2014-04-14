@@ -175,9 +175,10 @@ class ZfecFs(Fuse):
 
             self.required = server.required
             self.shares = server.shares
-            self.fd = os.open('/'.join((server.source, self.path)), os.O_RDONLY)
+            self.fd = os.open(self.path, os.O_RDONLY)
             self.file = os.fdopen(self.fd, 'r')
             self.direct_io = False
+            self.keep_cache = False
 
         def _filesize(self):
             self.file.seek(0, os.SEEK_END)
@@ -215,7 +216,7 @@ class ZfecFs(Fuse):
             data = self.file.read(length * req)
             data = self._correct_datasize(data, offset * req)
 
-            parts = tuple(data[p:len(data):req] for p in range(req))
+            parts = tuple(data[p::req] for p in range(req))
 
             global server
             return server.encoder.encode(parts, (self.index,))[0]
