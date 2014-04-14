@@ -43,7 +43,7 @@ class ZfecFs(Fuse):
         if len(parts) == 0: return (-1, '/')
         index = self.decode_storage_index(parts[0])
         if index is None: return (None, None)
-        return (index, self.source + '/'.join(parts[1:]))
+        return (index, self.source + '/' + '/'.join(parts[1:]))
 
     def shared_file_stat(self, stat):
         # divide by self.required, round up and add metadata length
