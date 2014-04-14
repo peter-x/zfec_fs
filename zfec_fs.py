@@ -62,10 +62,18 @@ class ZfecFs(Fuse):
                 return sharepath
         return None
 
-    def original_file_stat(self, stat):
-        # TODO subtract metadata length from size, multiply by three
-        # and correctly add padding found in metadata
-        return stat
+    def original_file_stat(self, fd):
+        stat = os.fstat(fd)
+        f = os.fdopen(fd)
+        f.seek(0)
+        (req, index, left) = [ord(c) for c in f.read(ZfecFs.METADATA_LENGTH)]
+        # subtract metadata size, multiply by required and take leftover into
+        # account
+        size = (stat.st_size - ZfecFs.METADATA_LENGTH - 1) * req + left
+        return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
+                               stat.st_nlink, stat.st_uid, stat.st_gid,
+                               size,
+                               stat.st_atime, stat.st_mtime, stat.st_ctime))
 
 
     # fuse filesystem functions
@@ -75,8 +83,15 @@ class ZfecFs(Fuse):
             sharepath = self.first_match_in_share(path)
             if sharepath is None:
                 return -ENOENT
+            elif not os.path.islink(sharepath) and os.path.isfile(sharepath):
+                fd = os.open(sharepath, os.O_RDONLY)
+                try:
+                    return self.original_file_stat(fd)
+                finally:
+                    try: os.close(fd)
+                    except: pass
             else:
-                return self.original_file_stat(os.lstat(sharepath))
+                return os.lstat(sharepath)
         else:
             index, path = self.decode_path(path)
             if index is None:
@@ -351,7 +366,7 @@ class ZfecFs(Fuse):
 
         def fgetattr(self):
             global server
-            return server.original_file_stat(os.fstat(self.fds[0]))
+            return server.original_file_stat(self.fds[0])
 
         def lock(self, cmd, owner, **kw):
             op = { fcntl.F_UNLCK : fcntl.LOCK_UN,
