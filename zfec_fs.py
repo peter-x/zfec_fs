@@ -298,10 +298,10 @@ class ZfecFs(Fuse):
                     print("file sizes differ")
                     raise OSError(EIO, '') # TODO more precise
                 indices.append(index)
-            if leftover >= self.required or sharesize < 3:
+            if leftover >= self.required or sharesize < ZfecFs.METADATA_LENGTH:
                 print("leftover value invalid")
                 raise OSError(EIO, '') # TODO more precise
-            sharesize -= 3
+            sharesize -= ZfecFs.METADATA_LENGTH
             if sharesize == 0 and leftover != 0:
                 print("leftover too large for size")
                 raise OSError(EIO, '') # TODO more precise
@@ -320,12 +320,26 @@ class ZfecFs(Fuse):
             l = min(len(x) for x in data)
             data = tuple(x[:l] for x in data)
             global server
-            decoded = server.decoder.decode(data, indices)[0]
+            decoded = server.decoder.decode(data, indices)
+            decoded = self._transpose(decoded)
             if offset + len(decoded) > filesize:
                 return decoded[:filesize - offset]
             else:
                 return decoded
 
+        def _transpose(self, data):
+            # TODO optimize this
+            def gen(data):
+                num = len(data)
+                l = len(data[0])
+                pos = 0
+                while pos < l:
+                    i = 0
+                    while i < num:
+                        yield data[i][pos]
+                        i += 1
+                    pos += 1
+            return ''.join(gen(data))
 
         def release(self, flags):
             for f in self.files:
