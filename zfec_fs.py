@@ -272,6 +272,7 @@ class ZfecFs(Fuse):
             self.shares = server.shares
             self.fds = []
             self.files = []
+            self.metadata = None
             for share in os.listdir(self.source):
                 sharepath = '/'.join((self.source, share, path))
                 try:
@@ -320,11 +321,15 @@ class ZfecFs(Fuse):
             if sharesize == 0 and leftover != 0:
                 print("leftover too large for size")
                 raise OSError(EIO, '') # TODO more precise
-            return ((sharesize - 1) * self.required + leftover, indices)
+            self.metadata = ((sharesize - 1) * self.required + leftover, indices)
+            return self.metadata
 
         def read(self, length, offset):
             required = self.required
-            (filesize, indices) = self._read_metadata()
+            if self.metadata is None:
+                (filesize, indices) = self._read_metadata()
+            else:
+                (filesize, indices) = self.metadata
             if offset >= filesize:
                 return ''
             data = []
