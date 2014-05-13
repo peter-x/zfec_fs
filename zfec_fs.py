@@ -353,7 +353,7 @@ class ZfecFs(Fuse):
 
         def fgetattr(self):
             global server
-            return server.original_file_stat(self.fds[0])
+            return server.original_file_stat(os.dup(self.fds[0]))
 
         def lock(self, cmd, owner, **kw):
             op = { fcntl.F_UNLCK : fcntl.LOCK_UN,
