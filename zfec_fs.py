@@ -328,19 +328,17 @@ class ZfecFs(Fuse):
             if offset >= filesize:
                 return ''
             data = []
+            readlength = (length + self.required - 1) // self.required
             for i in range(required):
                 f = self.files[i]
                 f.seek(offset // required + ZfecFs.METADATA_LENGTH)
-                data.append(f.read(length))
+                data.append(f.read(readlength))
             l = min(len(x) for x in data)
             data = tuple(x[:l] for x in data)
             global server
             decoded = server.decoder.decode(data, indices)
             decoded = self._transpose(decoded)
-            if offset + len(decoded) > filesize:
-                return decoded[:filesize - offset]
-            else:
-                return decoded
+            return decoded[:min(length, filesize - offset)]
 
         def _transpose(self, data):
             return ''.join(''.join(x) for x in zip(*data))
