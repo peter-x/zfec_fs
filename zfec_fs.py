@@ -348,29 +348,14 @@ class ZfecFs(Fuse):
                 f.close()
 
         def flush(self):
-            for fd in self.fds:
-                os.close(os.dup(fd))
+            pass
 
         def fgetattr(self):
             global server
             return server.original_file_stat(os.dup(self.fds[0]))
 
         def lock(self, cmd, owner, **kw):
-            op = { fcntl.F_UNLCK : fcntl.LOCK_UN,
-                   fcntl.F_RDLCK : fcntl.LOCK_SH,
-                   fcntl.F_WRLCK : fcntl.LOCK_EX }[kw['l_type']]
-            if cmd == fcntl.F_GETLK:
-                return -EOPNOTSUPP
-            elif cmd == fcntl.F_SETLK:
-                if op != fcntl.LOCK_UN:
-                    op |= fcntl.LOCK_NB
-            elif cmd == fcntl.F_SETLKW:
-                pass
-            else:
-                return -EINVAL
-
-            # TODO locking all will certainly result in deadlocks...
-            fcntl.lockf(self.fds[0], op, kw['l_start'], kw['l_len'])
+            return -EOPNOTSUPP
 
 
 server = None
