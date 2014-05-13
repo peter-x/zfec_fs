@@ -69,7 +69,9 @@ class ZfecFs(Fuse):
         (req, index, left) = [ord(c) for c in f.read(ZfecFs.METADATA_LENGTH)]
         # subtract metadata size, multiply by required and take leftover into
         # account
-        size = (stat.st_size - ZfecFs.METADATA_LENGTH - 1) * req + left
+        leftadd = 0
+        if left > 0: leftadd = 1
+        size = (stat.st_size - ZfecFs.METADATA_LENGTH - leftadd) * req + left
         return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
                                stat.st_nlink, stat.st_uid, stat.st_gid,
                                size,
@@ -321,7 +323,9 @@ class ZfecFs(Fuse):
             if sharesize == 0 and leftover != 0:
                 print("leftover too large for size")
                 raise OSError(EIO, '') # TODO more precise
-            self.metadata = ((sharesize - 1) * self.required + leftover, indices)
+            leftadd = 0
+            if leftover > 0: leftadd = 1
+            self.metadata = ((sharesize - leftadd) * self.required + leftover, indices)
             return self.metadata
 
         def read(self, length, offset):
