@@ -14,6 +14,37 @@ fuse.fuse_python_api = (0, 2)
 fuse.feature_assert('stateful_files')
 
 
+class ReadableFile:
+    """Should not be used directly, use the openBy* functions"""
+    def __init__(self, fd):
+        self.fd = fd
+        self.file = os.fdopen(self.fd, 'r')
+
+    @staticmethod
+    def openByPath(path):
+        return ReadableFile(os.open(path, os.O_RDONLY))
+
+    @staticmethod
+    def openByFD(fd):
+        return ReadableFile(fd)
+
+    # public interface
+
+    def read(self, offset, length):
+        self.file.seek(offset)
+        return self.file.read(length)
+
+    def size(self):
+        self.file.seek(0, os.SEEK_END)
+        return self.file.tell()
+
+    def stat(self):
+        return os.fstat(self.fd)
+
+    def close(self):
+        os.close(self.fd)
+
+
 class ZfecFs(Fuse):
 
     METADATA_LENGTH = 3
@@ -63,10 +94,9 @@ class ZfecFs(Fuse):
         return None
 
     def original_file_stat(self, fd):
-        stat = os.fstat(fd)
-        f = os.fdopen(fd)
-        f.seek(0)
-        (req, index, left) = [ord(c) for c in f.read(ZfecFs.METADATA_LENGTH)]
+        f = ReadableFile.openByFD(fd)
+        stat = f.stat()
+        (req, index, left) = [ord(c) for c in f.read(0, ZfecFs.METADATA_LENGTH)]
         # subtract metadata size, multiply by required and take leftover into
         # account
         leftadd = 0
@@ -192,14 +222,12 @@ class ZfecFs(Fuse):
 
             self.required = server.required
             self.shares = server.shares
-            self.fd = os.open(self.path, os.O_RDONLY)
-            self.file = os.fdopen(self.fd, 'r')
+            self.file = ReadableFile.openByPath(self.path)
             self.direct_io = False
             self.keep_cache = False
 
         def _filesize(self):
-            self.file.seek(0, os.SEEK_END)
-            return self.file.tell()
+            return self.file.size()
 
         def _correct_datasize(self, data, fileoffset):
             excess = len(data) % self.required
@@ -229,8 +257,7 @@ class ZfecFs(Fuse):
 
         def _read_data(self, length, offset):
             req = self.required
-            self.file.seek(offset * req)
-            data = self.file.read(length * req)
+            data = self.file.read(offset * req, length * req)
             data = self._correct_datasize(data, offset * req)
 
             parts = tuple(data[p::req] for p in range(req))
@@ -242,28 +269,14 @@ class ZfecFs(Fuse):
             self.file.close()
 
         def flush(self):
-            os.close(os.dup(self.fd))
+            pass
 
         def fgetattr(self):
             global server
-            return server.shared_file_stat(os.fstat(self.fd))
+            return server.shared_file_stat(self.file.stat())
 
         def lock(self, cmd, owner, **kw):
-            op = { fcntl.F_UNLCK : fcntl.LOCK_UN,
-                   fcntl.F_RDLCK : fcntl.LOCK_SH,
-                   fcntl.F_WRLCK : fcntl.LOCK_EX }[kw['l_type']]
-            if cmd == fcntl.F_GETLK:
-                return -EOPNOTSUPP
-            elif cmd == fcntl.F_SETLK:
-                if op != fcntl.LOCK_UN:
-                    op |= fcntl.LOCK_NB
-            elif cmd == fcntl.F_SETLKW:
-                pass
-            else:
-                return -EINVAL
-
-            fcntl.lockf(self.fd, op, kw['l_start'], kw['l_len'])
-
+            return -EOPNOTSUPP
 
     class ZfecRestoreFile(object):
 
@@ -272,21 +285,17 @@ class ZfecFs(Fuse):
             self.source = server.source
             self.required = server.required
             self.shares = server.shares
-            self.fds = []
             self.files = []
             self.metadata = None
             for share in os.listdir(self.source):
                 sharepath = '/'.join((self.source, share, path))
                 try:
-                    fd = os.open(sharepath, os.O_RDONLY)
-                    f = os.fdopen(fd, 'r')
+                    self.files.append(ReadableFile.openByPath(sharepath))
                 except OSError:
                     continue
-                self.fds.append(fd)
-                self.files.append(f)
-                if len(self.fds) >= self.required:
+                if len(self.files) >= self.required:
                     break
-            if len(self.fds) < self.required:
+            if len(self.files) < self.required:
                 raise OSError(EIO, '') # TODO more precise
 
             self.direct_io = False
@@ -297,9 +306,8 @@ class ZfecFs(Fuse):
             sharesize = None
             indices = []
             for f in self.files:
-                f.seek(0)
                 (req, index, left) = [ord(c) for c in
-                                            f.read(ZfecFs.METADATA_LENGTH)]
+                                            f.read(0, ZfecFs.METADATA_LENGTH)]
                 if req != self.required:
                     print("req value is wrong")
                     raise OSError(EIO, '') # TODO more precise
@@ -308,8 +316,7 @@ class ZfecFs(Fuse):
                 elif leftover != left:
                     print("leftover values differ")
                     raise OSError(EIO, '') # TODO more precise
-                f.seek(0, os.SEEK_END)
-                size = f.tell()
+                size = f.size()
                 if sharesize is None:
                     sharesize = size
                 elif sharesize != size:
@@ -341,8 +348,8 @@ class ZfecFs(Fuse):
             readlength = (length + self.required - 1) // self.required + 1
             for i in range(required):
                 f = self.files[i]
-                f.seek(offset // required + ZfecFs.METADATA_LENGTH)
-                data.append(f.read(readlength))
+                data.append(f.read(offset // required + ZfecFs.METADATA_LENGTH,
+                                   readlength))
             l = min(len(x) for x in data)
             data = tuple(x[:l] for x in data)
             global server
