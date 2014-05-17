@@ -44,6 +44,59 @@ class ReadableFile:
     def close(self):
         os.close(self.fd)
 
+class FileEncoder:
+    def __init__(self, required, index, originalFile, zfecEncoder):
+        self.required = required
+        self.index = index
+        self.originalFile = originalFile
+        self.zfecEncoder = zfecEncoder
+
+        self.originalSize = None
+
+    @staticmethod
+    def encoded_size(required, originalSize):
+        # divide by required, round up and add metadata length
+        return (originalSize + required - 1) // required + ZfecFs.METADATA_LENGTH
+
+    def read(self, offset, length):
+        metadata_part = min(ZfecFs.METADATA_LENGTH - offset, length)
+        if metadata_part > 0:
+            return self._read_metadata(metadata_part, offset) + \
+                   self._read_data(length - metadata_part, 0)
+        else:
+            return self._read_data(length, offset - ZfecFs.METADATA_LENGTH)
+
+    def _original_size(self):
+        if self.originalSize is None:
+            self.originalSize = self.originalFile.size()
+        return self.originalSize
+
+    def _correct_datasize(self, data, fileoffset):
+        excess = len(data) % self.required
+        if excess == 0:
+            return data
+        # short read, check whether we are at the end of the file
+        if fileoffset + len(data) < self._original_size():
+            # end of file not reached, just remove excess bytes
+            return data[:-excess]
+        else:
+            # end of file reached, add surplus zeros
+            return data + '\0' * (self.required - excess)
+
+    def _read_metadata(self, length, offset):
+        if length <= 0: return ''
+        metadata = chr(self.required) + chr(self.index) + \
+                   chr(self._original_size() % self.required)
+        return metadata[offset:offset + length]
+
+    def _read_data(self, length, offset):
+        req = self.required
+        data = self.originalFile.read(offset * req, length * req)
+        data = self._correct_datasize(data, offset * req)
+
+        parts = tuple(data[p::req] for p in range(req))
+
+        return self.zfecEncoder.encode(parts, (self.index,))[0]
 
 class ZfecFs(Fuse):
 
@@ -77,9 +130,7 @@ class ZfecFs(Fuse):
         return (index, self.source + '/' + '/'.join(parts[1:]))
 
     def shared_file_stat(self, stat):
-        # divide by self.required, round up and add metadata length
-        size = (stat.st_size + self.required - 1) // self.required + \
-               ZfecFs.METADATA_LENGTH
+        size = FileEncoder.encoded_size(self.required, stat.st_size)
         return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
                                stat.st_nlink, stat.st_uid, stat.st_gid,
                                size,
@@ -218,52 +269,16 @@ class ZfecFs(Fuse):
 
         def __init__(self, path, flags, *mode):
             global server
-            self.index, self.path = server.decode_path(path)
+            index, path = server.decode_path(path)
 
-            self.required = server.required
-            self.shares = server.shares
-            self.file = ReadableFile.openByPath(self.path)
+            self.file = ReadableFile.openByPath(path)
+            self.fileEncoder = FileEncoder(server.required, index,
+                                           self.file, server.encoder)
             self.direct_io = False
             self.keep_cache = False
 
-        def _filesize(self):
-            return self.file.size()
-
-        def _correct_datasize(self, data, fileoffset):
-            excess = len(data) % self.required
-            if excess == 0:
-                return data
-            # short read, check whether we are at the end of the file
-            if fileoffset + len(data) < self._filesize():
-                # end of file not reached, just remove excess bytes
-                return data[:-excess]
-            else:
-                # end of file reached, add surplus zeros
-                return data + '\0' * (self.required - excess)
-
         def read(self, length, offset):
-            metadata_part = min(ZfecFs.METADATA_LENGTH - offset, length)
-            if metadata_part > 0:
-                return self._read_metadata(metadata_part, offset) + \
-                       self._read_data(length - metadata_part, 0)
-            else:
-                return self._read_data(length, offset - ZfecFs.METADATA_LENGTH)
-
-        def _read_metadata(self, length, offset):
-            if length <= 0: return ''
-            metadata = chr(self.required) + chr(self.index) + \
-                       chr(self._filesize() % self.required)
-            return metadata[offset:offset + length]
-
-        def _read_data(self, length, offset):
-            req = self.required
-            data = self.file.read(offset * req, length * req)
-            data = self._correct_datasize(data, offset * req)
-
-            parts = tuple(data[p::req] for p in range(req))
-
-            global server
-            return server.encoder.encode(parts, (self.index,))[0]
+            return self.fileEncoder.read(offset, length)
 
         def release(self, flags):
             self.file.close()
