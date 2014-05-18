@@ -18,7 +18,6 @@ class ReadableFile:
     """Should not be used directly, use the openBy* functions"""
     def __init__(self, fd):
         self.fd = fd
-        self.file = os.fdopen(self.fd, 'r')
 
     @staticmethod
     def openByPath(path):
@@ -31,12 +30,13 @@ class ReadableFile:
     # public interface
 
     def read(self, offset, length):
-        self.file.seek(offset)
-        return self.file.read(length)
+        pos = os.lseek(self.fd, offset, 0)
+        if pos != offset:
+            return ''
+        return os.read(self.fd, length)
 
     def size(self):
-        self.file.seek(0, os.SEEK_END)
-        return self.file.tell()
+        return os.lseek(self.fd, 0, os.SEEK_END)
 
     def stat(self):
         return os.fstat(self.fd)
