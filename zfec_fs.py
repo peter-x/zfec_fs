@@ -98,6 +98,82 @@ class FileEncoder:
 
         return self.zfecEncoder.encode(parts, (self.index,))[0]
 
+class FileDecoder:
+    def __init__(self, required, encodedFiles, zfecDecoder):
+        self.required = required
+        self.encodedFiles = encodedFiles
+        self.zfecDecoder = zfecDecoder
+
+        self.metadata = None
+
+    @staticmethod
+    def decoded_size(encodedFile):
+        (req, index, left) = [ord(c) for c in encodedFile.read(0, ZfecFs.METADATA_LENGTH)]
+        # subtract metadata size, multiply by required and take leftover into
+        # account
+        leftadd = 0
+        if left > 0: leftadd = 1
+        return (encodedFile.size() - ZfecFs.METADATA_LENGTH - leftadd) * req + left
+
+    def read(self, offset, length):
+        required = self.required
+        if self.metadata is None:
+            (filesize, indices) = self._read_metadata()
+        else:
+            (filesize, indices) = self.metadata
+        if offset >= filesize:
+            return ''
+        data = []
+        # read some more if offset is not multiple of self.required
+        readlength = (length + self.required - 1) // self.required + 1
+        for i in range(required):
+            f = self.encodedFiles[i]
+            data.append(f.read(offset // required + ZfecFs.METADATA_LENGTH,
+                               readlength))
+        l = min(len(x) for x in data)
+        data = tuple(x[:l] for x in data)
+        decoded = self.zfecDecoder.decode(data, indices)
+        decoded = self._transpose(decoded)
+        offsetshift = offset % required
+        return decoded[offsetshift:offsetshift + min(length, filesize - offset)]
+
+    def _transpose(self, data):
+        return ''.join(''.join(x) for x in zip(*data))
+
+    def _read_metadata(self):
+        leftover = None
+        sharesize = None
+        indices = []
+        for f in self.encodedFiles:
+            (req, index, left) = [ord(c) for c in
+                                        f.read(0, ZfecFs.METADATA_LENGTH)]
+            if req != self.required:
+                print("req value is wrong")
+                raise OSError(EIO, '') # TODO more precise
+            if leftover is None:
+                leftover = left
+            elif leftover != left:
+                print("leftover values differ")
+                raise OSError(EIO, '') # TODO more precise
+            size = f.size()
+            if sharesize is None:
+                sharesize = size
+            elif sharesize != size:
+                print("file sizes differ")
+                raise OSError(EIO, '') # TODO more precise
+            indices.append(index)
+        if leftover >= self.required or sharesize < ZfecFs.METADATA_LENGTH:
+            print("leftover value invalid")
+            raise OSError(EIO, '') # TODO more precise
+        sharesize -= ZfecFs.METADATA_LENGTH
+        if sharesize == 0 and leftover != 0:
+            print("leftover too large for size")
+            raise OSError(EIO, '') # TODO more precise
+        leftadd = 0
+        if leftover > 0: leftadd = 1
+        self.metadata = ((sharesize - leftadd) * self.required + leftover, indices)
+        return self.metadata
+
 class ZfecFs(Fuse):
 
     METADATA_LENGTH = 3
@@ -147,12 +223,7 @@ class ZfecFs(Fuse):
     def original_file_stat(self, fd):
         f = ReadableFile.openByFD(fd)
         stat = f.stat()
-        (req, index, left) = [ord(c) for c in f.read(0, ZfecFs.METADATA_LENGTH)]
-        # subtract metadata size, multiply by required and take leftover into
-        # account
-        leftadd = 0
-        if left > 0: leftadd = 1
-        size = (stat.st_size - ZfecFs.METADATA_LENGTH - leftadd) * req + left
+        size = FileDecoder.decoded_size(f)
         return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
                                stat.st_nlink, stat.st_uid, stat.st_gid,
                                size,
@@ -297,84 +368,25 @@ class ZfecFs(Fuse):
 
         def __init__(self, path, flags, *mode):
             global server
-            self.source = server.source
-            self.required = server.required
-            self.shares = server.shares
+            required = server.required
             self.files = []
-            self.metadata = None
-            for share in os.listdir(self.source):
-                sharepath = '/'.join((self.source, share, path))
+            for share in os.listdir(server.source):
+                sharepath = '/'.join((server.source, share, path))
                 try:
                     self.files.append(ReadableFile.openByPath(sharepath))
                 except OSError:
                     continue
-                if len(self.files) >= self.required:
+                if len(self.files) >= required:
                     break
-            if len(self.files) < self.required:
+            if len(self.files) < required:
                 raise OSError(EIO, '') # TODO more precise
+            self.decoder = FileDecoder(required, self.files, server.decoder)
 
             self.direct_io = False
             self.keep_cache = False
- 
-        def _read_metadata(self):
-            leftover = None
-            sharesize = None
-            indices = []
-            for f in self.files:
-                (req, index, left) = [ord(c) for c in
-                                            f.read(0, ZfecFs.METADATA_LENGTH)]
-                if req != self.required:
-                    print("req value is wrong")
-                    raise OSError(EIO, '') # TODO more precise
-                if leftover is None:
-                    leftover = left
-                elif leftover != left:
-                    print("leftover values differ")
-                    raise OSError(EIO, '') # TODO more precise
-                size = f.size()
-                if sharesize is None:
-                    sharesize = size
-                elif sharesize != size:
-                    print("file sizes differ")
-                    raise OSError(EIO, '') # TODO more precise
-                indices.append(index)
-            if leftover >= self.required or sharesize < ZfecFs.METADATA_LENGTH:
-                print("leftover value invalid")
-                raise OSError(EIO, '') # TODO more precise
-            sharesize -= ZfecFs.METADATA_LENGTH
-            if sharesize == 0 and leftover != 0:
-                print("leftover too large for size")
-                raise OSError(EIO, '') # TODO more precise
-            leftadd = 0
-            if leftover > 0: leftadd = 1
-            self.metadata = ((sharesize - leftadd) * self.required + leftover, indices)
-            return self.metadata
 
         def read(self, length, offset):
-            required = self.required
-            if self.metadata is None:
-                (filesize, indices) = self._read_metadata()
-            else:
-                (filesize, indices) = self.metadata
-            if offset >= filesize:
-                return ''
-            data = []
-            # read some more if offset is not multiple of self.required
-            readlength = (length + self.required - 1) // self.required + 1
-            for i in range(required):
-                f = self.files[i]
-                data.append(f.read(offset // required + ZfecFs.METADATA_LENGTH,
-                                   readlength))
-            l = min(len(x) for x in data)
-            data = tuple(x[:l] for x in data)
-            global server
-            decoded = server.decoder.decode(data, indices)
-            decoded = self._transpose(decoded)
-            offsetshift = offset % required
-            return decoded[offsetshift:offsetshift + min(length, filesize - offset)]
-
-        def _transpose(self, data):
-            return ''.join(''.join(x) for x in zip(*data))
+            return self.decoder.read(offset, length)
 
         def release(self, flags):
             for f in self.files:
