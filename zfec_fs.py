@@ -220,10 +220,9 @@ class ZfecFs(Fuse):
                 return sharepath
         return None
 
-    def original_file_stat(self, fd):
-        f = ReadableFile.openByFD(fd)
-        stat = f.stat()
-        size = FileDecoder.decoded_size(f)
+    def original_file_stat(self, encodedFile):
+        stat = encodedFile.stat()
+        size = FileDecoder.decoded_size(encodedFile)
         return os.stat_result((stat.st_mode, stat.st_ino, stat.st_dev,
                                stat.st_nlink, stat.st_uid, stat.st_gid,
                                size,
@@ -238,11 +237,11 @@ class ZfecFs(Fuse):
             if sharepath is None:
                 return -ENOENT
             elif not os.path.islink(sharepath) and os.path.isfile(sharepath):
-                fd = os.open(sharepath, os.O_RDONLY)
+                f = ReadableFile.openByPath(sharepath)
                 try:
-                    return self.original_file_stat(fd)
+                    return self.original_file_stat(f)
                 finally:
-                    try: os.close(fd)
+                    try: f.close()
                     except: pass
             else:
                 return os.lstat(sharepath)
@@ -397,7 +396,7 @@ class ZfecFs(Fuse):
 
         def fgetattr(self):
             global server
-            return server.original_file_stat(os.dup(self.fds[0]))
+            return server.original_file_stat(self.files[0])
 
         def lock(self, cmd, owner, **kw):
             return -EOPNOTSUPP
