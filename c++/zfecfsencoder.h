@@ -17,11 +17,14 @@ public:
                   const std::string &source);
 
     virtual int Getattr(const char* path, struct stat* stbuf);
+    virtual int Opendir(const char* path, struct fuse_file_info* fileInfo);
     virtual int Readdir(const char* path, void* buffer, fuse_fill_dir_t filler,
-                       off_t offset, struct fuse_file_info *fi);
+                       off_t offset, struct fuse_file_info *fileInfo);
+    virtual int Releasedir(const char* path, struct fuse_file_info* fileInfo);
     virtual int Open(const char* path, struct fuse_file_info* fileInfo);
     virtual int Read(const char* path, char* outBuffer, size_t size, off_t offset,
                      struct fuse_file_info* fileInfo);
+    virtual int Release(const char* path, struct fuse_file_info* fileInfo);
 private:
     off_t EncodedSize(off_t originalSize) const
     {

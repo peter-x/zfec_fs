@@ -30,11 +30,14 @@ public:
     unsigned int GetNumShares() const { return numShares; }
 
     virtual int Getattr(const char* path, struct stat* stbuf) = 0;
+    virtual int Opendir(const char* path, struct fuse_file_info* fileInfo) = 0;
     virtual int Readdir(const char* path, void* buffer, fuse_fill_dir_t filler,
                         off_t offset, struct fuse_file_info *fileInfo) = 0;
+    virtual int Releasedir(const char* path, struct fuse_file_info* fileInfo) = 0;
     virtual int Open(const char* path, struct fuse_file_info* fileInfo) = 0;
     virtual int Read(const char* path, char* outBuffer, size_t size, off_t offset,
                      struct fuse_file_info* fileInfo) = 0;
+    virtual int Release(const char* path, struct fuse_file_info* fileInfo) = 0;
 
 protected:
     ZFecFS(unsigned int sharesRequired, unsigned int numShares, const std::string& source)

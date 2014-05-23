@@ -39,11 +39,26 @@ int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
     return 0;
 }
 
-int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t filler,
-                           off_t offset, fuse_file_info* fi)
+int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
 {
-    (void) offset;
-    (void) fi;
+    try {
+        DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
+        fileInfo->keep_cache = 1;
+        fileInfo->fh = 0;
+        if (decodedPath.indexGiven) {
+            fileInfo->fh = reinterpret_cast<uint64_t>(opendir(decodedPath.path.c_str()));
+            if (fileInfo->fh == 0)
+                return -errno;
+        }
+    } catch (const std::exception& exc) {
+        return -ENOENT;
+    }
+    return 0;
+}
+
+int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t filler,
+                           off_t offset, fuse_file_info* fileInfo)
+{
 
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
@@ -60,7 +75,7 @@ int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t fille
                 filler(buffer, name, NULL, 0);
             }
         } else {
-            DIR* d = opendir(decodedPath.path.c_str());
+            DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
             if (d == NULL) return -errno;
 
             if (offset != 0)
@@ -71,15 +86,37 @@ int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t fille
                 st.st_mode = entry->d_type << 12;
                 st.st_size = EncodedSize(st.st_size);
 
-                filler(buffer, entry->d_name, &st, telldir(d));
+                if (filler(buffer, entry->d_name, &st, telldir(d)) == 1)
+                    break;
             }
-            closedir(d);
-            return 0;
         }
     } catch (const std::exception& exc) {
         return -ENOENT;
     }
     return 0;
+}
+
+int ZFecFSEncoder::Releasedir(const char *path, fuse_file_info *fileInfo)
+{
+    (void) path;
+    if (fileInfo->fh != 0) {
+        DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
+        closedir(d);
+    }
+    return 0;
+}
+
+int ZFecFSEncoder::Open(const char *path, fuse_file_info *fileInfo)
+{
+    //    char real_path[PATH_MAX];
+    //    int index = decode_path(path, real_path);
+    //    if (index < -1) return -ENOENT;
+
+    //    // TODO try to open the real file
+
+    //    if ((fi->flags & 3) != O_RDONLY)
+    //        return -EACCES;
+    return -ENOENT;
 }
 
 int ZFecFSEncoder::Read(const char *path, char *outBuffer, size_t size, off_t offset, fuse_file_info *fileInfo)
@@ -158,16 +195,8 @@ int ZFecFSEncoder::Read(const char *path, char *outBuffer, size_t size, off_t of
     //    return -ENOENT;
 }
 
-int ZFecFSEncoder::Open(const char *path, fuse_file_info *fileInfo)
+int ZFecFSEncoder::Release(const char *path, fuse_file_info *fileInfo)
 {
-    //    char real_path[PATH_MAX];
-    //    int index = decode_path(path, real_path);
-    //    if (index < -1) return -ENOENT;
-
-    //    // TODO try to open the real file
-
-    //    if ((fi->flags & 3) != O_RDONLY)
-    //        return -EACCES;
 }
 
 

@@ -50,15 +50,25 @@ static int zfecfs_getattr(const char* path, struct stat* stbuf)
     return ZFecFS::ZFecFS::GetInstance().Getattr(path, stbuf);
 }
 
-static int zfecfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-             off_t offset, struct fuse_file_info *fi)
+static int zfecfs_opendir(const char *path, struct fuse_file_info *fileInfo)
 {
-    return ZFecFS::ZFecFS::GetInstance().Readdir(path, buf, filler, offset, fi);
+    return ZFecFS::ZFecFS::GetInstance().Opendir(path, fileInfo);
 }
 
-static int zfecfs_open(const char *path, struct fuse_file_info *fi)
+static int zfecfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+             off_t offset, struct fuse_file_info *fileInfo)
 {
-    return ZFecFS::ZFecFS::GetInstance().Open(path, fi);
+    return ZFecFS::ZFecFS::GetInstance().Readdir(path, buf, filler, offset, fileInfo);
+}
+
+static int zfecfs_releasedir(const char *path, struct fuse_file_info *fileInfo)
+{
+    return ZFecFS::ZFecFS::GetInstance().Releasedir(path, fileInfo);
+}
+
+static int zfecfs_open(const char *path, struct fuse_file_info *fileInfo)
+{
+    return ZFecFS::ZFecFS::GetInstance().Open(path, fileInfo);
 }
 
 size_t copy_nth_byte(char* out, const char* in, int stride, int len)
@@ -73,13 +83,17 @@ size_t copy_nth_byte(char* out, const char* in, int stride, int len)
     return out - orig_out;
 }
 
-static int zfecfs_read(const char *path, char *outBuffer, size_t size, off_t offset,
-              struct fuse_file_info *fileInfo)
+static int zfecfs_read(const char* path, char* outBuffer, size_t size, off_t offset,
+              struct fuse_file_info* fileInfo)
 {
     return ZFecFS::ZFecFS::GetInstance().Read(path, outBuffer, size, offset,
                                               fileInfo);
 }
 
+static int zfecfs_release(const char* path, struct fuse_file_info* fileInfo)
+{
+    return ZFecFS::ZFecFS::GetInstance().Release(path, fileInfo);
+}
 
 static struct fuse_operations zfecfs_operations;
 
@@ -99,9 +113,14 @@ int main(int argc, char *argv[])
     }
 
     zfecfs_operations.getattr = zfecfs_getattr;
+
+    zfecfs_operations.opendir = zfecfs_opendir;
     zfecfs_operations.readdir = zfecfs_readdir;
+    zfecfs_operations.releasedir = zfecfs_releasedir;
+
     zfecfs_operations.open = zfecfs_open;
     zfecfs_operations.read = zfecfs_read;
+    zfecfs_operations.release = zfecfs_release;
 
     return fuse_main(argc, argv, &zfecfs_operations, NULL);
 }
