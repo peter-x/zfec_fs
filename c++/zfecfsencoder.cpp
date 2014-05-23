@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -9,8 +10,14 @@
 
 #include "utils.h"
 #include "decodedpath.h"
+#include "encodedfile.h"
 
 namespace ZFecFS {
+
+class OpenOriginalFile {
+    int fileHandle;
+    DecodedPath::ShareIndex shareIndex;
+};
 
 ZFecFSEncoder::ZFecFSEncoder(unsigned int sharesRequired,
                              unsigned int numShares,
@@ -24,7 +31,8 @@ int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
         if (decodedPath.indexGiven) {
-            lstat(decodedPath.path.c_str(), stbuf);
+            if (lstat(decodedPath.path.c_str(), stbuf) == -1)
+                return -errno;
             if ((stbuf->st_mode & S_IFMT) == S_IFREG)
                 stbuf->st_size = EncodedSize(stbuf->st_size);
         } else {
@@ -106,20 +114,30 @@ int ZFecFSEncoder::Releasedir(const char *path, fuse_file_info *fileInfo)
     return 0;
 }
 
-int ZFecFSEncoder::Open(const char *path, fuse_file_info *fileInfo)
+int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
 {
-    //    char real_path[PATH_MAX];
-    //    int index = decode_path(path, real_path);
-    //    if (index < -1) return -ENOENT;
+    // TODO which flags in fileInfo do we want to set?
 
-    //    // TODO try to open the real file
+    try {
+        DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
 
-    //    if ((fi->flags & 3) != O_RDONLY)
-    //        return -EACCES;
-    return -ENOENT;
+        if ((fileInfo->flags & O_ACCMODE) != O_RDONLY)
+            return -EACCES;
+
+        try {
+            fileInfo->fh = EncodedFile::Open(decodedPath);
+        } catch (const std::exception& exc) {
+            return -errno;
+        }
+    } catch (const std::exception& exc) {
+        return -ENOENT;
+    }
+    return 0;
 }
 
-int ZFecFSEncoder::Read(const char *path, char *outBuffer, size_t size, off_t offset, fuse_file_info *fileInfo)
+int ZFecFSEncoder::Read(const char *path, char *outBuffer,
+                        size_t size, off_t offset,
+                        fuse_file_info *fileInfo)
 {
     //    char real_path[PATH_MAX];
     //    int index = decode_path(path, real_path);
@@ -197,6 +215,7 @@ int ZFecFSEncoder::Read(const char *path, char *outBuffer, size_t size, off_t of
 
 int ZFecFSEncoder::Release(const char *path, fuse_file_info *fileInfo)
 {
+    delete EncodedFile::FromHandle(fileInfo->fh);
 }
 
 

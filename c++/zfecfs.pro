@@ -5,11 +5,13 @@ CONFIG -= qt
 DEFINES += _FILE_OFFSET_BITS=64
 LIBS += -lfuse
 SOURCES += main.cpp fec.c \
-    zfecfsencoder.cpp
+    zfecfsencoder.cpp \
+    encodedfile.cpp
 
 HEADERS += \
     decodedpath.h \
     utils.h \
     zfecfs.h \
-    zfecfsencoder.h
+    zfecfsencoder.h \
+    encodedfile.h
 
