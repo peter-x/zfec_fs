@@ -7,11 +7,12 @@ LIBS += -lfuse
 SOURCES += main.cpp fec.c \
     zfecfsencoder.cpp \
     encodedfile.cpp
-
+CCFLAG += --std=c11
 HEADERS += \
     decodedpath.h \
     utils.h \
     zfecfs.h \
     zfecfsencoder.h \
-    encodedfile.h
+    encodedfile.h \
+    fecwrapper.h
 

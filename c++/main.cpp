@@ -71,18 +71,6 @@ static int zfecfs_open(const char *path, struct fuse_file_info *fileInfo)
     return ZFecFS::ZFecFS::GetInstance().Open(path, fileInfo);
 }
 
-size_t copy_nth_byte(char* out, const char* in, int stride, int len)
-{
-    char* orig_out = out;
-    const char* end = in + len;
-    while (in < end) {
-        *out = *in;
-        in += stride;
-        out++;
-    }
-    return out - orig_out;
-}
-
 static int zfecfs_read(const char* path, char* outBuffer, size_t size, off_t offset,
               struct fuse_file_info* fileInfo)
 {
@@ -121,6 +109,9 @@ int main(int argc, char *argv[])
     zfecfs_operations.open = zfecfs_open;
     zfecfs_operations.read = zfecfs_read;
     zfecfs_operations.release = zfecfs_release;
+
+    zfecfs_operations.flag_nopath = 1;
+    zfecfs_operations.flag_nullpath_ok = 1;
 
     return fuse_main(argc, argv, &zfecfs_operations, NULL);
 }

@@ -14,11 +14,6 @@
 
 namespace ZFecFS {
 
-class OpenOriginalFile {
-    int fileHandle;
-    DecodedPath::ShareIndex shareIndex;
-};
-
 ZFecFSEncoder::ZFecFSEncoder(unsigned int sharesRequired,
                              unsigned int numShares,
                              const std::string& source)
@@ -49,10 +44,10 @@ int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
 
 int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
 {
+    fileInfo->keep_cache = 1;
+    fileInfo->fh = 0;
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
-        fileInfo->keep_cache = 1;
-        fileInfo->fh = 0;
         if (decodedPath.indexGiven) {
             fileInfo->fh = reinterpret_cast<uint64_t>(opendir(decodedPath.path.c_str()));
             if (fileInfo->fh == 0)
@@ -64,16 +59,15 @@ int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
     return 0;
 }
 
-int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t filler,
+int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                            off_t offset, fuse_file_info* fileInfo)
 {
 
     try {
-        DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
         struct stat st;
         memset(&st, 0, sizeof(st));
 
-        if (!decodedPath.indexGiven) {
+        if (fileInfo->fh == 0) {
             filler(buffer, ".", NULL, 0);
             filler(buffer, "..", NULL, 0);
             for (DecodedPath::ShareIndex shareIndex = 0; shareIndex < numShares; ++shareIndex) {
@@ -104,9 +98,8 @@ int ZFecFSEncoder::Readdir(const char* path, void* buffer, fuse_fill_dir_t fille
     return 0;
 }
 
-int ZFecFSEncoder::Releasedir(const char *path, fuse_file_info *fileInfo)
+int ZFecFSEncoder::Releasedir(const char*, fuse_file_info *fileInfo)
 {
-    (void) path;
     if (fileInfo->fh != 0) {
         DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
         closedir(d);
@@ -116,7 +109,7 @@ int ZFecFSEncoder::Releasedir(const char *path, fuse_file_info *fileInfo)
 
 int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
 {
-    // TODO which flags in fileInfo do we want to set?
+    fileInfo->keep_cache = 1;
 
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
@@ -125,7 +118,7 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
             return -EACCES;
 
         try {
-            fileInfo->fh = EncodedFile::Open(decodedPath);
+            fileInfo->fh = EncodedFile::Open(sharesRequired, decodedPath);
         } catch (const std::exception& exc) {
             return -errno;
         }
@@ -134,89 +127,5 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
     }
     return 0;
 }
-
-int ZFecFSEncoder::Read(const char *path, char *outBuffer,
-                        size_t size, off_t offset,
-                        fuse_file_info *fileInfo)
-{
-    //    char real_path[PATH_MAX];
-    //    int index = decode_path(path, real_path);
-    //    if (index < 0) return -ENOENT;
-
-    //    (void) fi;
-
-    //    int fd = open(real_path, O_RDONLY);
-    //    if (fd == -1) return -errno;
-
-    //    int required = zfecfsSettings.required;
-    //    if (lseek(fd, offset * required, SEEK_SET) != offset * required) {
-    //        close(fd);
-    //        return -errno;
-    //    }
-
-    //    //if (size > 4096) size = 4096;
-    //    char *read_buffer = (char*) malloc(size * required);
-    //    if (read_buffer == NULL) {
-    //        close(fd);
-    //        return -errno;
-    //    }
-
-    //    size_t size_read = read(fd, read_buffer, size * required);
-    //    if (size_read == -1) {
-    //        free(read_buffer);
-    //        close(fd);
-    //        return -errno;
-    //    }
-
-    //    int ret = -1;
-    //    if (index < required) {
-    //        ret = copy_nth_byte(out_buffer, read_buffer + index, required, size_read - index);
-    //    } else {
-    //        char* work_buffer = (char*) malloc(size_read * required);
-    //        char** fec_input = (char**) malloc(required * sizeof(char*));
-    //        if (work_buffer == NULL || fec_input == NULL) {
-    //            free(fec_input);
-    //            free(work_buffer);
-    //            free(read_buffer);
-    //            close(fd);
-    //            return -errno;
-    //        }
-
-    //        // TODO do this correction only if we did not reach EOF
-    //        if (size_read % required != 0)
-    //            size_read -= required - (size_read % required);
-    //        unsigned int packet_size = size_read / required;
-    //        int i = 0;
-    //        for (i = 0; i < required; i ++) {
-    //            fec_input[i] = work_buffer + i * packet_size;
-    //            int num = copy_nth_byte(fec_input[i],
-    //                                    read_buffer + i,
-    //                                    required,
-    //                                    size_read);
-    //            while (num < packet_size) fec_input[i][num++] = 0;
-    //        }
-    //        fec_encode(zfecfsSettings.fecData,
-    //                   (const gf * const * const) fec_input,
-    //                   (gf * const* const)&out_buffer,
-    //                   (unsigned int*) &index,
-    //                   1,
-    //                   packet_size);
-    //        ret = packet_size;
-
-    //        free(fec_input);
-    //        free(work_buffer);
-    //    }
-
-    //    free(read_buffer);
-    //    close(fd);
-    //    return ret;
-    //    return -ENOENT;
-}
-
-int ZFecFSEncoder::Release(const char *path, fuse_file_info *fileInfo)
-{
-    delete EncodedFile::FromHandle(fileInfo->fh);
-}
-
 
 } // namespace ZFecFS

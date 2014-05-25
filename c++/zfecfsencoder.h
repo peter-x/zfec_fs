@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #include "zfecfs.h"
+#include "encodedfile.h"
 
 namespace ZFecFS {
 
@@ -22,9 +23,18 @@ public:
                        off_t offset, struct fuse_file_info *fileInfo);
     virtual int Releasedir(const char* path, struct fuse_file_info* fileInfo);
     virtual int Open(const char* path, struct fuse_file_info* fileInfo);
-    virtual int Read(const char* path, char* outBuffer, size_t size, off_t offset,
-                     struct fuse_file_info* fileInfo);
-    virtual int Release(const char* path, struct fuse_file_info* fileInfo);
+    virtual int Read(const char*, char *outBuffer,
+                     size_t size, off_t offset,
+                     fuse_file_info *fileInfo)
+    {
+        return EncodedFile::FromHandle(fileInfo->fh)->Read(outBuffer, size, offset, GetFecWrapper());
+    }
+    virtual int Release(const char*, fuse_file_info *fileInfo)
+    {
+        delete EncodedFile::FromHandle(fileInfo->fh);
+        return 0;
+    }
+
 private:
     off_t EncodedSize(off_t originalSize) const
     {
