@@ -9,6 +9,7 @@
 
 #include <vector>
 
+// TODO make everyting large-file-proof
 
 namespace ZFecFS {
 
@@ -18,69 +19,128 @@ EncodedFile::~EncodedFile()
     close(fileHandle);
 }
 
-u_int64_t EncodedFile::Open(int requiredShares, const DecodedPath& decodedPath)
+u_int64_t EncodedFile::Open(const DecodedPath& decodedPath, const FecWrapper& fecWrapper)
 {
     int fileHandle = open(decodedPath.path.c_str(), O_RDONLY);
     if (fileHandle == -1)
         return 0;
     return reinterpret_cast<u_int64_t>(new EncodedFile(fileHandle,
-                                                       requiredShares,
-                                                       decodedPath.index));
+                                                       decodedPath.index,
+                                                       fecWrapper));
 }
 
-int EncodedFile::Read(char *outBuffer, size_t size, off_t offset, const FecWrapper &fec)
+int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
 {
-    unsigned int required = fec.GetSharesRequired();
+    if (size == 0) return 0;
 
-    // TODO metadata
+    char* outBufferPos = outBuffer;
+    FillMetadata(outBufferPos, size, offset);
 
-    if (lseek(fileHandle, offset * required, SEEK_SET) != offset * required)
+    while (outBufferPos < outBuffer + size) {
+        char* const outBufferPosBeforeFill = outBufferPos;
+        size_t sizeWanted = outBuffer + size - outBufferPos;
+        if (!FillData(outBufferPos,
+                      std::min<size_t>(sizeWanted,
+                                       transformBatchSize * fecWrapper.GetSharesRequired()),
+                      offset))
+            break;
+        offset += outBufferPos - outBufferPosBeforeFill;
+    }
+    return outBufferPos - outBuffer;
+}
+
+void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t& offset)
+{
+    if (offset < off_t(Metadata::size())) {
+        Metadata meta(fecWrapper.GetSharesRequired(), shareIndex, OriginalSize());
+        while (offset < off_t(Metadata::size())) {
+            if (size == 0) {
+                offset = 0;
+                return;
+            }
+            *outBuffer++ = *(meta.begin() + offset++);
+            size--;
+        }
+    }
+    offset -= Metadata::size();
+}
+
+bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
+{
+    unsigned int sharesRequired = fecWrapper.GetSharesRequired();
+    if (lseek(fileHandle, offset * sharesRequired, SEEK_SET)
+            != offset * sharesRequired)
         return -errno;
 
-    if (size > 4096) size = 4096; // TODO read larger batches, but decode them in loops
+    // TODO how to check for out of memory?
+    readBuffer.resize(size * sharesRequired);
 
-    std::vector<char> readBuffer(size * required); // TODO how to check for out of memory (also below)?
+    size_t sizeRead = read(fileHandle, readBuffer.data(), size * sharesRequired);
+    if (sizeRead == -1u || sizeRead == 0)
+        return false;
+    sizeRead = std::min(sizeRead, size * sharesRequired);
 
-    size_t sizeRead = read(fileHandle, readBuffer.data(), size * required);
-    if (sizeRead == -1u)
-        return -errno;
-    sizeRead = std::min(sizeRead, size * required);
+    sizeRead = AdjustDataSize(sizeRead, offset);
 
-    if (shareIndex < required) {
-        return CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
-                              readBuffer.begin() + sizeRead, required);
+    if (shareIndex < sharesRequired) {
+        outBuffer = CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
+                                   readBuffer.begin() + shareIndex + sizeRead, sharesRequired);
     } else {
-        // TODO modify this if we reached EOF
-        if (sizeRead % required != 0)
-            sizeRead -= required - (sizeRead % required);
-
-        // TODO pool?
-        std::vector<char> workBuffer(sizeRead);
+        workBuffer.resize(sizeRead);
 
         // TODO can we have compile-time specializations for small required values?
-        Distribute(workBuffer.begin(), readBuffer.begin(), readBuffer.end(), required);
+        Distribute(workBuffer.begin(), readBuffer.begin(), readBuffer.end(),
+                   sharesRequired);
 
-        int shareSize = sizeRead / required;
-        std::vector<char*> fecInputPtrs(required);
-        for (unsigned int i = 0; i < required; ++i)
+        int shareSize = sizeRead / sharesRequired;
+        std::vector<char*> fecInputPtrs(sharesRequired);
+        for (unsigned int i = 0; i < sharesRequired; ++i)
             fecInputPtrs[i] = workBuffer.data() + i * shareSize;
 
-        fec.Encode(outBuffer, fecInputPtrs.data(), shareIndex, shareSize);
-        return shareSize;
+        fecWrapper.Encode(outBuffer, fecInputPtrs.data(), shareIndex, shareSize);
+        outBuffer += shareSize;
     }
+    return true;
+}
+
+size_t EncodedFile::AdjustDataSize(size_t sizeRead, off_t offset)
+{
+    unsigned int sharesRequired = fecWrapper.GetSharesRequired();
+    int excessBytes = sizeRead % sharesRequired;
+    if (excessBytes != 0) {
+        // short read, check if we are at the end of the file
+        if (off_t(offset * sharesRequired + sizeRead) < OriginalSize()) {
+            // not EOF, remove excess data
+            sizeRead -= excessBytes;
+        } else {
+            // EOF, add surplus zeros
+            while (sizeRead % sharesRequired != 0)
+                readBuffer[sizeRead++] = 0;
+        }
+    }
+    return sizeRead;
+}
+
+off_t EncodedFile::OriginalSize() const
+{
+    if (!originalSizeSet) {
+        originalSize = lseek(fileHandle, 0, SEEK_END);
+        if (originalSize == static_cast<off_t>(-1))
+            throw SimpleException("Error seeking to end of file.");
+        originalSizeSet = true;
+    }
+    return originalSize;
 }
 
 template <class TOutIter, class TInIter>
-size_t EncodedFile::CopyNthElement(TOutIter out, TInIter in, const TInIter end,
-                                   unsigned int stride) const
+TOutIter EncodedFile::CopyNthElement(TOutIter out, TInIter in, const TInIter end,
+                                 unsigned int stride) const
 {
-    TOutIter outpos = out;
     while (in < end) {
-        *outpos++ = *in;
+        *out++ = *in;
         in += stride;
     }
-
-    return outpos - out;
+    return out;
 }
 
 template <class TOutIter, class TInIter>

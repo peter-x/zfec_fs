@@ -29,7 +29,7 @@ int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
             if (lstat(decodedPath.path.c_str(), stbuf) == -1)
                 return -errno;
             if ((stbuf->st_mode & S_IFMT) == S_IFREG)
-                stbuf->st_size = EncodedSize(stbuf->st_size);
+                stbuf->st_size = EncodedFile::Size(stbuf->st_size, sharesRequired);
         } else {
             memset(stbuf, 0, sizeof(struct stat));
             stbuf->st_mode = S_IFDIR | 0755;
@@ -86,7 +86,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
             {
                 st.st_ino = entry->d_ino;
                 st.st_mode = entry->d_type << 12;
-                st.st_size = EncodedSize(st.st_size);
+                st.st_size = EncodedFile::Size(st.st_size, sharesRequired);
 
                 if (filler(buffer, entry->d_name, &st, telldir(d)) == 1)
                     break;
@@ -118,7 +118,7 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
             return -EACCES;
 
         try {
-            fileInfo->fh = EncodedFile::Open(sharesRequired, decodedPath);
+            fileInfo->fh = EncodedFile::Open(decodedPath, GetFecWrapper());
         } catch (const std::exception& exc) {
             return -errno;
         }

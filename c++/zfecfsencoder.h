@@ -3,6 +3,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
+
+#include <exception>
 
 #include "zfecfs.h"
 #include "encodedfile.h"
@@ -27,19 +30,16 @@ public:
                      size_t size, off_t offset,
                      fuse_file_info *fileInfo)
     {
-        return EncodedFile::FromHandle(fileInfo->fh)->Read(outBuffer, size, offset, GetFecWrapper());
+        try {
+            return EncodedFile::FromHandle(fileInfo->fh)->Read(outBuffer, size, offset);
+        } catch (const std::exception& exc) {
+            return -EIO;
+        }
     }
     virtual int Release(const char*, fuse_file_info *fileInfo)
     {
         delete EncodedFile::FromHandle(fileInfo->fh);
         return 0;
-    }
-
-private:
-    off_t EncodedSize(off_t originalSize) const
-    {
-        return (originalSize + sharesRequired - 1) / sharesRequired
-                + 3;// TODO ZFecFSMetadata::Size;
     }
 };
 

@@ -14,5 +14,6 @@ HEADERS += \
     zfecfs.h \
     zfecfsencoder.h \
     encodedfile.h \
-    fecwrapper.h
+    fecwrapper.h \
+    metadata.h
 
