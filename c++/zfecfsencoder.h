@@ -39,6 +39,7 @@ public:
     virtual int Release(const char*, fuse_file_info *fileInfo)
     {
         delete EncodedFile::FromHandle(fileInfo->fh);
+        fileInfo->fh = 0;
         return 0;
     }
 };

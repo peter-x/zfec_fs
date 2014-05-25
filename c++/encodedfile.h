@@ -50,7 +50,7 @@ private:
     template <class TOutIter, class TInIter>
     void Distribute(TOutIter out, TInIter in, const TInIter end, unsigned int chunks) const;
 
-    void FillMetadata(char*& outBuffer, size_t size, off_t& offset);
+    void FillMetadata(char*& outBuffer, size_t size, off_t offset);
     bool FillData(char*& outBuffer, size_t size, off_t offset);
 
     const static size_t transformBatchSize = 8192;
@@ -63,6 +63,7 @@ private:
     mutable off_t originalSize;
     mutable bool originalSizeSet;
 
+    // TODO replace by data structure that does not initialize the data
     std::vector<char> readBuffer;
     std::vector<char> workBuffer;
 };

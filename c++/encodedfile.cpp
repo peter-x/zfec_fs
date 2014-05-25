@@ -37,32 +37,24 @@ int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
     FillMetadata(outBufferPos, size, offset);
 
     while (outBufferPos < outBuffer + size) {
-        char* const outBufferPosBeforeFill = outBufferPos;
-        size_t sizeWanted = outBuffer + size - outBufferPos;
+        const off_t offsetInData = offset - Metadata::size() + (outBufferPos - outBuffer);
+        const size_t sizeWanted = outBuffer + size - outBufferPos;
         if (!FillData(outBufferPos,
                       std::min<size_t>(sizeWanted,
                                        transformBatchSize * fecWrapper.GetSharesRequired()),
-                      offset))
+                      offsetInData))
             break;
-        offset += outBufferPos - outBufferPosBeforeFill;
     }
     return outBufferPos - outBuffer;
 }
 
-void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t& offset)
+void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
 {
     if (offset < off_t(Metadata::size())) {
         Metadata meta(fecWrapper.GetSharesRequired(), shareIndex, OriginalSize());
-        while (offset < off_t(Metadata::size())) {
-            if (size == 0) {
-                offset = 0;
-                return;
-            }
+        for (; size > 0 && offset < off_t(Metadata::size()); size --)
             *outBuffer++ = *(meta.begin() + offset++);
-            size--;
-        }
     }
-    offset -= Metadata::size();
 }
 
 bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
@@ -76,20 +68,22 @@ bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
     readBuffer.resize(size * sharesRequired);
 
     size_t sizeRead = read(fileHandle, readBuffer.data(), size * sharesRequired);
-    if (sizeRead == -1u || sizeRead == 0)
+    if (sizeRead <= 0)
         return false;
     sizeRead = std::min(sizeRead, size * sharesRequired);
 
     sizeRead = AdjustDataSize(sizeRead, offset);
+    assert(sizeRead % sharesRequired == 0);
 
     if (shareIndex < sharesRequired) {
+        // TODO can we have compile-time specializations for small required values?
         outBuffer = CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
                                    readBuffer.begin() + shareIndex + sizeRead, sharesRequired);
     } else {
         workBuffer.resize(sizeRead);
 
-        // TODO can we have compile-time specializations for small required values?
-        Distribute(workBuffer.begin(), readBuffer.begin(), readBuffer.end(),
+        Distribute(workBuffer.begin(),
+                   readBuffer.begin(), readBuffer.begin() + sizeRead,
                    sharesRequired);
 
         int shareSize = sizeRead / sharesRequired;
@@ -118,6 +112,7 @@ size_t EncodedFile::AdjustDataSize(size_t sizeRead, off_t offset)
                 readBuffer[sizeRead++] = 0;
         }
     }
+    assert(sizeRead % sharesRequired == 0);
     return sizeRead;
 }
 

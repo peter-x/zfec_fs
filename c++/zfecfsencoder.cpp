@@ -103,6 +103,7 @@ int ZFecFSEncoder::Releasedir(const char*, fuse_file_info *fileInfo)
     if (fileInfo->fh != 0) {
         DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
         closedir(d);
+        fileInfo->fh = 0;
     }
     return 0;
 }

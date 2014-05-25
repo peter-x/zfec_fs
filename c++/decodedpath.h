@@ -42,6 +42,7 @@ public:
             throw SimpleException("Invalid share index");
         *buffer++ = Hex::EncodeDigit((index & 0xf0) >> 4);
         *buffer++ = Hex::EncodeDigit(index & 0xf);
+        *buffer++ = 0;
     }
 
 private:
