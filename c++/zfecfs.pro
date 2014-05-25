@@ -6,7 +6,10 @@ DEFINES += _FILE_OFFSET_BITS=64
 LIBS += -lfuse
 SOURCES += main.cpp fec.c \
     zfecfsencoder.cpp \
-    encodedfile.cpp
+    encodedfile.cpp \
+    zfecfsdecoder.cpp \
+    decodedfile.cpp \
+    shareddir.cpp
 CCFLAG += --std=c11
 HEADERS += \
     decodedpath.h \
@@ -15,5 +18,8 @@ HEADERS += \
     zfecfsencoder.h \
     encodedfile.h \
     fecwrapper.h \
-    metadata.h
+    metadata.h \
+    zfecfsdecoder.h \
+    decodedfile.h \
+    shareddir.h
 

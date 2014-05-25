@@ -14,12 +14,6 @@
 
 namespace ZFecFS {
 
-ZFecFSEncoder::ZFecFSEncoder(unsigned int sharesRequired,
-                             unsigned int numShares,
-                             const std::string& source)
-    : ZFecFS(sharesRequired, numShares, source)
-{
-}
 
 int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
 {
@@ -62,7 +56,6 @@ int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
 int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                            off_t offset, fuse_file_info* fileInfo)
 {
-
     try {
         struct stat st;
         memset(&st, 0, sizeof(st));

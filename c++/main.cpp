@@ -28,6 +28,7 @@ extern "C" {
 
 #include "zfecfs.h"
 #include "zfecfsencoder.h"
+#include "zfecfsdecoder.h"
 
 namespace ZFecFS {
 
@@ -92,10 +93,10 @@ int main(int argc, char *argv[])
     bool decode = false;
     unsigned int required = 3;
     unsigned int numShares = 20;
-    const char* source = "/";
+    const char* source = "/";///tmp/x/"; // TODO has to be /-terminated!
 
     if (decode) {
-        // TODO
+        ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSDecoder(required, numShares, source);
     } else {
         ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSEncoder(required, numShares, source);
     }

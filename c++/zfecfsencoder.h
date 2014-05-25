@@ -18,7 +18,9 @@ class ZFecFSEncoder : public ZFecFS
 public:
     ZFecFSEncoder(unsigned int sharesRequired,
                   unsigned int numShares,
-                  const std::string &source);
+                  const std::string &source)
+    : ZFecFS(sharesRequired, numShares, source)
+    {}
 
     virtual int Getattr(const char* path, struct stat* stbuf);
     virtual int Opendir(const char* path, struct fuse_file_info* fileInfo);
