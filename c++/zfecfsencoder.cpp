@@ -8,8 +8,11 @@
 #include <errno.h>
 #include <dirent.h>
 
+#include <pthread.h>
+
 #include "utils.h"
 #include "decodedpath.h"
+#include "shareddir.h"
 #include "encodedfile.h"
 
 namespace ZFecFS {
@@ -43,7 +46,7 @@ int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
         if (decodedPath.indexGiven) {
-            fileInfo->fh = reinterpret_cast<uint64_t>(opendir(decodedPath.path.c_str()));
+            fileInfo->fh = SharedDir::Open(decodedPath);
             if (fileInfo->fh == 0)
                 return -errno;
         }
@@ -70,18 +73,18 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                 filler(buffer, name, NULL, 0);
             }
         } else {
-            DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
-            if (d == NULL) return -errno;
+            SharedDir& dir = *SharedDir::FromHandle(fileInfo->fh);
+            Mutex::Lock lock(dir.GetMutex());
 
             if (offset != 0)
-                seekdir(d, offset);
-            for (struct dirent* entry = readdir(d); entry != NULL; entry = readdir(d))
-            {
+                dir.Seek(offset);
+
+            for (struct dirent* entry = dir.Readdir(); entry != NULL; entry = dir.Readdir()) {
                 st.st_ino = entry->d_ino;
                 st.st_mode = entry->d_type << 12;
                 st.st_size = EncodedFile::Size(st.st_size, sharesRequired);
 
-                if (filler(buffer, entry->d_name, &st, telldir(d)) == 1)
+                if (filler(buffer, entry->d_name, &st, dir.Telldir()) == 1)
                     break;
             }
         }
@@ -94,8 +97,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
 int ZFecFSEncoder::Releasedir(const char*, fuse_file_info *fileInfo)
 {
     if (fileInfo->fh != 0) {
-        DIR* d = reinterpret_cast<DIR*>(fileInfo->fh);
-        closedir(d);
+        delete SharedDir::FromHandle(fileInfo->fh);
         fileInfo->fh = 0;
     }
     return 0;

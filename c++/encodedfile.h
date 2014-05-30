@@ -2,12 +2,15 @@
 #define ENCODEDFILE_H
 
 #include <sys/types.h>
+#include <pthread.h>
 
 #include <vector>
+#include <map>
 
 #include "fecwrapper.h"
 #include "decodedpath.h"
 #include "metadata.h"
+#include "mutex.h"
 
 namespace ZFecFS {
 
@@ -31,6 +34,13 @@ public:
     }
 
 private:
+    class ThreadLocalData {
+    public:
+        // TODO replace by data structure that does not initialize the data
+        std::vector<char> readBuffer;
+        std::vector<char> workBuffer;
+    };
+
     EncodedFile(int fileHandle,
                 DecodedPath::ShareIndex shareIndex,
                 const FecWrapper& fecWrapper)
@@ -42,7 +52,13 @@ private:
     {
     }
 
-    size_t AdjustDataSize(size_t sizeRead, off_t offset);
+    ThreadLocalData& GetThreadLocalData()
+    {
+        Mutex::Lock lock(mutex);
+        return threadLocalData[pthread_self()];
+    }
+
+    size_t AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset);
     off_t OriginalSize() const;
 
     template <class TOutIter, class TInIter>
@@ -60,12 +76,12 @@ private:
 
     const FecWrapper& fecWrapper;
 
+    mutable Mutex mutex;
+
+    std::map<pthread_t, ThreadLocalData> threadLocalData;
+
     mutable off_t originalSize;
     mutable bool originalSizeSet;
-
-    // TODO replace by data structure that does not initialize the data
-    std::vector<char> readBuffer;
-    std::vector<char> workBuffer;
 };
 
 } // namespace ZFecFS

@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include "mutex.h"
+
 // TODO make everyting large-file-proof
 
 namespace ZFecFS {
@@ -60,26 +62,25 @@ void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
 bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
-    if (lseek(fileHandle, offset * sharesRequired, SEEK_SET)
-            != offset * sharesRequired)
-        return -errno;
-
-    // TODO how to check for out of memory?
+    std::vector<char> readBuffer(ThreadLocalData().readBuffer);
     readBuffer.resize(size * sharesRequired);
 
-    size_t sizeRead = read(fileHandle, readBuffer.data(), size * sharesRequired);
+    size_t sizeRead = pread(fileHandle, readBuffer.data(),
+                            size * sharesRequired, offset * sharesRequired);
     if (sizeRead <= 0)
         return false;
     sizeRead = std::min(sizeRead, size * sharesRequired);
 
-    sizeRead = AdjustDataSize(sizeRead, offset);
+    sizeRead = AdjustDataSize(readBuffer, sizeRead, offset);
     assert(sizeRead % sharesRequired == 0);
+    assert(sizeRead > 0);
 
     if (shareIndex < sharesRequired) {
         // TODO can we have compile-time specializations for small required values?
         outBuffer = CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
                                    readBuffer.begin() + shareIndex + sizeRead, sharesRequired);
     } else {
+        std::vector<char> workBuffer(ThreadLocalData().workBuffer);
         workBuffer.resize(sizeRead);
 
         Distribute(workBuffer.begin(),
@@ -97,7 +98,7 @@ bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
     return true;
 }
 
-size_t EncodedFile::AdjustDataSize(size_t sizeRead, off_t offset)
+size_t EncodedFile::AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
     int excessBytes = sizeRead % sharesRequired;
@@ -118,6 +119,8 @@ size_t EncodedFile::AdjustDataSize(size_t sizeRead, off_t offset)
 
 off_t EncodedFile::OriginalSize() const
 {
+    Mutex::Lock lock(mutex);
+
     if (!originalSizeSet) {
         originalSize = lseek(fileHandle, 0, SEEK_END);
         if (originalSize == static_cast<off_t>(-1))
@@ -145,6 +148,8 @@ void EncodedFile::Distribute(TOutIter out, TInIter in, const TInIter end,
     assert((end - in) % chunks == 0);
 
     int chunkSize = (end - in) / chunks;
+
+    assert((end - in) == ((out + chunks * chunkSize) - out));
 
     for (int i = 0; i < chunks; ++i)
         CopyNthElement(out + i * chunkSize, in + i, end, chunks);

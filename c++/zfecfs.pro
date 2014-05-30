@@ -8,8 +8,7 @@ SOURCES += main.cpp fec.c \
     zfecfsencoder.cpp \
     encodedfile.cpp \
     zfecfsdecoder.cpp \
-    decodedfile.cpp \
-    shareddir.cpp
+    decodedfile.cpp
 CCFLAG += --std=c11
 HEADERS += \
     decodedpath.h \
@@ -21,5 +20,6 @@ HEADERS += \
     metadata.h \
     zfecfsdecoder.h \
     decodedfile.h \
-    shareddir.h
+    shareddir.h \
+    mutex.h
 
