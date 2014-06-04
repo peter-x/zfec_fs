@@ -12,6 +12,7 @@ public:
     const unsigned char index;
     const unsigned char excessBytes;
 
+    static const size_t size = 3;
 public:
     explicit Metadata(const char* data)
         : required(data[0])
@@ -32,14 +33,8 @@ public:
 
     const char* end() const
     {
-        return begin() + size();
+        return begin() + size;
     }
-
-    static size_t size()
-    {
-        return sizeof(Metadata);
-    }
-
 };
 
 } // namespace ZFecFS

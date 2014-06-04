@@ -14,7 +14,7 @@ class DecodedFile
 {
 public:
     static DecodedFile* Open(const std::vector<std::string>& originalFiles, const FecWrapper& fecWrapper);
-    size_t Size();
+    size_t Size() const;
 
     ~DecodedFile();
 private:

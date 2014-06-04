@@ -39,7 +39,7 @@ int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
     FillMetadata(outBufferPos, size, offset);
 
     while (outBufferPos < outBuffer + size) {
-        const off_t offsetInData = offset - Metadata::size() + (outBufferPos - outBuffer);
+        const off_t offsetInData = offset - Metadata::size + (outBufferPos - outBuffer);
         const size_t sizeWanted = outBuffer + size - outBufferPos;
         if (!FillData(outBufferPos,
                       std::min<size_t>(sizeWanted,
@@ -52,9 +52,9 @@ int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
 
 void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
 {
-    if (offset < off_t(Metadata::size())) {
+    if (offset < off_t(Metadata::size)) {
         Metadata meta(fecWrapper.GetSharesRequired(), shareIndex, OriginalSize());
-        for (; size > 0 && offset < off_t(Metadata::size()); size --)
+        for (; size > 0 && offset < off_t(Metadata::size); size --)
             *outBuffer++ = *(meta.begin() + offset++);
     }
 }

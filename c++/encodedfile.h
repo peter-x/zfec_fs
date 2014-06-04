@@ -30,7 +30,7 @@ public:
     static off_t Size(off_t originalSize, int sharesRequired)
     {
         return (originalSize + sharesRequired - 1) / sharesRequired
-                + Metadata::size();
+                + Metadata::size;
     }
 
 private:
