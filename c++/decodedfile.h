@@ -13,19 +13,21 @@ namespace ZFecFS {
 class DecodedFile
 {
 public:
-    static DecodedFile* Open(const std::vector<std::string>& originalFiles, const FecWrapper& fecWrapper);
+    static DecodedFile* Open(const std::vector<std::string>& encodedFiles, const FecWrapper& fecWrapper);
     size_t Size() const;
 
+    static size_t Size(std::string encodedFilePath,
+                       const FecWrapper &fecWrapper);
     ~DecodedFile();
 private:
-    DecodedFile(const std::vector<int>& originalFileHandles, const FecWrapper& fecWrapper)
-        : originalFileHandles(originalFileHandles)
+    DecodedFile(const std::vector<int>& encodedFileHandles, const FecWrapper& fecWrapper)
+        : encodedFileHandles(encodedFileHandles)
         , fecWrapper(fecWrapper)
     {}
 
     static void CloseHandles(const std::vector<int>& fileHandles);
 
-    std::vector<int> originalFileHandles;
+    std::vector<int> encodedFileHandles;
     const FecWrapper& fecWrapper;
 };
 

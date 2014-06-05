@@ -20,6 +20,6 @@ HEADERS += \
     metadata.h \
     zfecfsdecoder.h \
     decodedfile.h \
-    shareddir.h \
-    mutex.h
+    mutex.h \
+    directory.h
 

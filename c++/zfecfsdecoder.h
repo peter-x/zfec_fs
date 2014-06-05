@@ -24,10 +24,8 @@ public:
     virtual int Getattr(const char* path, struct stat* stbuf);
     virtual int Opendir(const char* path, struct fuse_file_info* fileInfo);
     virtual int Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
-                        off_t offset, struct fuse_file_info *fileInfo)
-    { return -ENOENT; /* TODO */ }
-    virtual int Releasedir(const char*, struct fuse_file_info* fileInfo)
-    { return -ENOENT; /* TODO */ }
+                        off_t offset, struct fuse_file_info *fileInfo);
+    virtual int Releasedir(const char*, struct fuse_file_info* fileInfo);
     virtual int Open(const char* path, struct fuse_file_info* fileInfo)
     { return -ENOENT; /* TODO */ }
     virtual int Read(const char*, char *outBuffer,
@@ -38,7 +36,8 @@ public:
     { return -ENOENT; /* TODO */ }
 private:
     /// @note statBuf is optional
-    std::string GetFirstPathMatchInAnyShare(const char* pathToFind, struct stat* statBuf);
+    std::string GetFirstPathMatchInAnyShare(const char* pathToFind,
+                                            struct stat* statBuf = NULL);
 };
 
 } // namespace ZFecFS

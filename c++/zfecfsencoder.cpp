@@ -7,12 +7,13 @@
 #include <string.h>
 #include <errno.h>
 #include <dirent.h>
+#include <stdint.h>
 
 #include <pthread.h>
 
 #include "utils.h"
 #include "decodedpath.h"
-#include "shareddir.h"
+#include "directory.h"
 #include "encodedfile.h"
 
 namespace ZFecFS {
@@ -46,7 +47,7 @@ int ZFecFSEncoder::Opendir(const char* path, fuse_file_info* fileInfo)
     try {
         DecodedPath decodedPath = DecodedPath::DecodePath(path, GetSource());
         if (decodedPath.indexGiven) {
-            fileInfo->fh = SharedDir::Open(decodedPath);
+            fileInfo->fh = reinterpret_cast<uint64_t>(new Directory(decodedPath.path));
             if (fileInfo->fh == 0)
                 return -errno;
         }
@@ -73,7 +74,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                 filler(buffer, name, NULL, 0);
             }
         } else {
-            SharedDir& dir = *SharedDir::FromHandle(fileInfo->fh);
+            Directory& dir = *reinterpret_cast<Directory*>(fileInfo->fh);
             Mutex::Lock lock(dir.GetMutex());
 
             if (offset != 0)
@@ -97,7 +98,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
 int ZFecFSEncoder::Releasedir(const char*, fuse_file_info *fileInfo)
 {
     if (fileInfo->fh != 0) {
-        delete SharedDir::FromHandle(fileInfo->fh);
+        delete reinterpret_cast<Directory*>(fileInfo->fh);
         fileInfo->fh = 0;
     }
     return 0;

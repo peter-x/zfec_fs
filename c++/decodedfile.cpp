@@ -14,8 +14,8 @@ namespace ZFecFS {
 
 DecodedFile::~DecodedFile()
 {
-    CloseHandles(originalFileHandles);
-    originalFileHandles.clear();
+    CloseHandles(encodedFileHandles);
+    encodedFileHandles.clear();
 }
 
 void DecodedFile::CloseHandles(const std::vector<int>& fileHandles)
@@ -24,16 +24,16 @@ void DecodedFile::CloseHandles(const std::vector<int>& fileHandles)
         close(fileHandles[i]);
 }
 
-DecodedFile* DecodedFile::Open(const std::vector<std::string>& originalFiles,
+DecodedFile* DecodedFile::Open(const std::vector<std::string>& encodedFiles,
                                const FecWrapper &fecWrapper)
 {
-    if (originalFiles.size() < fecWrapper.GetSharesRequired()
+    if (encodedFiles.size() < fecWrapper.GetSharesRequired()
                             || fecWrapper.GetSharesRequired() < 1)
         throw SimpleException("Not enough encoded files.");
 
     std::vector<int> fileHandles;
-    for (unsigned int i = 0; i < originalFiles.size(); ++i) {
-        int handle = open(originalFiles[i].c_str(), O_RDONLY);
+    for (unsigned int i = 0; i < encodedFiles.size(); ++i) {
+        const int handle = open(encodedFiles[i].c_str(), O_RDONLY);
         if (handle == -1) {
             CloseHandles(fileHandles);
             throw SimpleException("Erorr opening original file.");
@@ -47,11 +47,11 @@ DecodedFile* DecodedFile::Open(const std::vector<std::string>& originalFiles,
 size_t DecodedFile::Size() const
 {
     struct stat statBuf;
-    if (fstat(originalFileHandles.front(), &statBuf) == -1)
+    if (fstat(encodedFileHandles.front(), &statBuf) == -1)
         throw SimpleException("Cannot stat first file.");
 
     char buffer[Metadata::size];
-    size_t sizeRead = pread(originalFileHandles.front(), buffer, 3, 0);
+    size_t sizeRead = pread(encodedFileHandles.front(), buffer, 3, 0);
     if (sizeRead != 3)
         throw SimpleException("Size cannot be read from file.");
     Metadata metadata(buffer);
@@ -60,6 +60,20 @@ size_t DecodedFile::Size() const
     if (statBuf.st_size < extraSize)
         throw SimpleException("Invalid encoded file.");
     return (statBuf.st_size - extraSize) * fecWrapper.GetSharesRequired() + metadata.excessBytes;
+}
+
+size_t DecodedFile::Size(std::string encodedFilePath,
+                         const FecWrapper &fecWrapper)
+{
+    const int handle = open(encodedFilePath.c_str(), O_RDONLY);
+    if (handle == -1)
+        throw SimpleException("Error opening encoded file");
+
+    std::vector<int> fileHandle;
+    fileHandle.push_back(handle);
+
+    DecodedFile decodedFile(fileHandle, fecWrapper);
+    return decodedFile.Size();
 }
 
 } // namespace ZFecFS

@@ -5,29 +5,23 @@
 #include <dirent.h>
 #include <stdint.h>
 
+#include <string>
+
+#include "utils.h"
 #include "mutex.h"
-#include "decodedpath.h"
 
 namespace ZFecFS {
 
-class SharedDir
+class Directory
 {
 public:
-    static uint64_t Open(const DecodedPath& path)
+    Directory(const std::string& path)
+    : dir(opendir(path.c_str()))
     {
-        DIR* dirStruct = opendir(path.path.c_str());
-        if (dirStruct == NULL) return 0;
-
-        SharedDir* dir = new SharedDir(dirStruct);
-        return reinterpret_cast<uint64_t>(dir);
+        if (dir == NULL) throw SimpleException("Error opening directory.");
     }
 
-    static SharedDir* FromHandle(uint64_t handle)
-    {
-        return reinterpret_cast<SharedDir*>(handle);
-    }
-
-    ~SharedDir()
+    ~Directory()
     {
         closedir(dir);
     }
@@ -52,8 +46,6 @@ public:
         return mutex;
     }
 private:
-    SharedDir(DIR* dir)
-      : dir(dir) {}
 
     Mutex mutex;
     DIR* dir;
