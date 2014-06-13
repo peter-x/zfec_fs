@@ -114,6 +114,7 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
         if ((fileInfo->flags & O_ACCMODE) != O_RDONLY)
             return -EACCES;
 
+        fileInfo->fh = 0;
         try {
             fileInfo->fh = EncodedFile::Open(decodedPath, GetFecWrapper());
         } catch (const std::exception& exc) {

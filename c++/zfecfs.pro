@@ -21,5 +21,6 @@ HEADERS += \
     zfecfsdecoder.h \
     decodedfile.h \
     mutex.h \
-    directory.h
+    directory.h \
+    file.h
 

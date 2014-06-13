@@ -33,11 +33,15 @@ int ZFecFSDecoder::Getattr(const char *path, struct stat *stbuf)
 
 int ZFecFSDecoder::Opendir(const char* path, fuse_file_info* fileInfo)
 {
-    // check whether the directory exists in at least one share
-    GetFirstPathMatchInAnyShare(path);
+    try {
+        // check whether the directory exists in at least one share
+        GetFirstPathMatchInAnyShare(path);
 
-    fileInfo->keep_cache = 1;
-    fileInfo->fh = reinterpret_cast<uint64_t>(new std::string(path));
+        fileInfo->keep_cache = 1;
+        fileInfo->fh = reinterpret_cast<uint64_t>(new std::string(path));
+    } catch (const std::exception& exc) {
+        return -ENOENT;
+    }
 
     return 0;
 }
@@ -75,7 +79,7 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                     st.st_ino = entry->d_ino;
                     st.st_mode = entry->d_type << 12;
                     // TODO this is very expensive - do we really need it?
-                    st.st_size = DecodedFile::Size(absolutePath, GetFecWrapper());
+                    st.st_size = DecodedFile::Size(absolutePath);
                     if (filler(buffer, entry->d_name, &st, 0) == 1)
                         return -EIO;
                 }
@@ -84,6 +88,7 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
             continue;
         }
     }
+
     return 0;
 }
 
@@ -91,6 +96,52 @@ int ZFecFSDecoder::Releasedir(const char *, fuse_file_info *fileInfo)
 {
     delete reinterpret_cast<std::string*>(fileInfo->fh);
     return 0;
+}
+
+int ZFecFSDecoder::Open(const char *path, fuse_file_info *fileInfo)
+{
+    try {
+        struct stat statBuf;
+        std::vector<std::string> paths = GetFirstNumPathMatchesInAnyShare(path,
+                                                                          GetFecWrapper().GetSharesRequired(),
+                                                                          &statBuf);
+        DecodedFile* file = DecodedFile::Open(paths, GetFecWrapper());
+        fileInfo->fh = reinterpret_cast<u_int64_t>(file);
+    } catch (const std::exception& exc) {
+        return -ENOENT;
+    }
+
+    return 0;
+}
+
+std::vector<std::string> ZFecFSDecoder::GetFirstNumPathMatchesInAnyShare(
+                             const char* pathToFind, unsigned int numMatches,
+                             struct stat* statBuf )
+{
+    struct stat statBufHere;
+    if (statBuf == NULL)
+        statBuf = &statBufHere;
+
+    Directory sourceDir(GetSource());
+
+    std::vector<std::string> paths;
+    std::string potentialPath = GetSource();
+    while (paths.size() < numMatches) {
+        struct dirent* entry = sourceDir.Readdir();
+        if (entry == NULL) break;
+
+        potentialPath.resize(GetSource().size());
+        potentialPath.append(entry->d_name)
+                     .append("/")
+                     .append(pathToFind);
+
+        if (lstat(potentialPath.c_str(), statBuf) == 0)
+            paths.push_back(potentialPath);
+    }
+    if (paths.size() >= numMatches)
+        return paths;
+    else
+        throw SimpleException("Not enough shares found for file.");
 }
 
 std::string ZFecFSDecoder::GetFirstPathMatchInAnyShare(const char* pathToFind,
@@ -112,8 +163,7 @@ std::string ZFecFSDecoder::GetFirstPathMatchInAnyShare(const char* pathToFind,
                      .append("/")
                      .append(pathToFind);
 
-        struct stat statBuf;
-        if (lstat(potentialPath.c_str(), &statBuf) == 0)
+        if (lstat(potentialPath.c_str(), statBuf) == 0)
             return potentialPath;
     }
 

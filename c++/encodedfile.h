@@ -11,14 +11,13 @@
 #include "decodedpath.h"
 #include "metadata.h"
 #include "mutex.h"
+#include "file.h"
 
 namespace ZFecFS {
 
 class EncodedFile
 {
 public:
-    ~EncodedFile();
-
     static u_int64_t Open(const DecodedPath& decodedPath, const FecWrapper& fecWrapper);
     static EncodedFile* FromHandle(u_int64_t handle)
     {
@@ -41,10 +40,10 @@ private:
         std::vector<char> workBuffer;
     };
 
-    EncodedFile(int fileHandle,
+    EncodedFile(const std::string& path,
                 DecodedPath::ShareIndex shareIndex,
                 const FecWrapper& fecWrapper)
-        : fileHandle(fileHandle)
+        : file(path)
         , shareIndex(shareIndex)
         , fecWrapper(fecWrapper)
         , originalSize(0)
@@ -71,7 +70,7 @@ private:
 
     const static size_t transformBatchSize = 8192;
 
-    const int fileHandle;
+    const File file;
     const DecodedPath::ShareIndex shareIndex;
 
     const FecWrapper& fecWrapper;

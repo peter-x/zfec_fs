@@ -9,24 +9,14 @@
 
 #include <vector>
 
-#include "mutex.h"
-
 // TODO make everyting large-file-proof
 
 namespace ZFecFS {
 
 
-EncodedFile::~EncodedFile()
-{
-    close(fileHandle);
-}
-
 u_int64_t EncodedFile::Open(const DecodedPath& decodedPath, const FecWrapper& fecWrapper)
 {
-    int fileHandle = open(decodedPath.path.c_str(), O_RDONLY);
-    if (fileHandle == -1)
-        return 0;
-    return reinterpret_cast<u_int64_t>(new EncodedFile(fileHandle,
+    return reinterpret_cast<u_int64_t>(new EncodedFile(decodedPath.path,
                                                        decodedPath.index,
                                                        fecWrapper));
 }
@@ -65,9 +55,8 @@ bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
     std::vector<char> readBuffer(ThreadLocalData().readBuffer);
     readBuffer.resize(size * sharesRequired);
 
-    size_t sizeRead = pread(fileHandle, readBuffer.data(),
-                            size * sharesRequired, offset * sharesRequired);
-    if (sizeRead <= 0)
+    size_t sizeRead = file.Read(readBuffer.data(), size * sharesRequired, offset * sharesRequired);
+    if (sizeRead == 0)
         return false;
     sizeRead = std::min(sizeRead, size * sharesRequired);
 
@@ -122,9 +111,7 @@ off_t EncodedFile::OriginalSize() const
     Mutex::Lock lock(mutex);
 
     if (!originalSizeSet) {
-        originalSize = lseek(fileHandle, 0, SEEK_END);
-        if (originalSize == static_cast<off_t>(-1))
-            throw SimpleException("Error seeking to end of file.");
+        originalSize = file.Size();
         originalSizeSet = true;
     }
     return originalSize;
