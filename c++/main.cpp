@@ -4,6 +4,8 @@
 #include <utility>
 #include <string>
 #include <exception>
+#include <sstream>
+#include <iostream>
 
 extern "C" {
 
@@ -20,7 +22,6 @@ extern "C" {
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
-
 
 }
 
@@ -86,19 +87,79 @@ static int zfecfs_release(const char* path, struct fuse_file_info* fileInfo)
 
 static struct fuse_operations zfecfs_operations;
 
-// TODO make this multithreaded (for now use -s)
+static void ShowHelp(const std::string& firstArg)
+{
+    std::cout << "Usage: " << firstArg << " [-r] [-d] [-f] <required> <shares> <source> <target>" << std::endl
+              << "    Creates a virtual erasure-coded mirror of the directory tree in <source> at <target>." << std::endl
+              << "    A total of <shares> shares is created, and an arbitrary subset of <required> shares" << std::endl
+              << "    is needed to recover it." << std::endl
+              << std::endl
+              << "    -r    Reverse the operation - erasure-coded data is available in <source> and the" << std::endl
+              << "          decoded data will appear at <target>." << std::endl
+              << "    -f    Stay in foreground." << std::endl
+              << "    -d    Add debug output, implies -f." << std::endl;
+}
 
 int main(int argc, char *argv[])
 {
-    bool decode = true;
-    unsigned int required = 3;
-    unsigned int numShares = 20;
-    const char* source = "/tmp/x/";///tmp/enc/";///tmp/x/"; // TODO has to be /-terminated!
+    bool decode = false;
+    unsigned int requiredShares = 0xffff;
+    unsigned int numShares = 0xffff;
+    std::string source;
+    std::string target;
+
+    int positionalOption = 0;
+    std::vector<char*> fuseArgv;
+    fuseArgv.push_back(argv[0]);
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg(argv[i]);
+        if (arg == "--help" || arg == "-h") {
+            ShowHelp(std::string(argv[0]));
+            return 0;
+        } else if (arg == "-r") {
+            decode = true;
+        } else if (arg == "-d" || arg == "-f") {
+            fuseArgv.push_back(argv[i]);
+        } else if (arg == "-o") {
+            fuseArgv.push_back(argv[i]);
+            ++i;
+            fuseArgv.push_back(argv[i]);
+        } else {
+            if (positionalOption < 2) {
+                std::istringstream s(arg);
+                s >> (positionalOption == 0 ? requiredShares : numShares);
+                if (s.fail()) {
+                    ShowHelp(argv[0]);
+                    return 1;
+                }
+            } else if (positionalOption == 2) {
+                source = arg;
+            } else if (positionalOption == 3) {
+                target = arg;
+                fuseArgv.push_back(argv[i]);
+            } else {
+                ShowHelp(argv[0]);
+                return 1;
+            }
+            positionalOption++;
+        }
+    }
+    if (positionalOption != 4
+            || requiredShares > 0xff || numShares > 0xff
+            || requiredShares > numShares
+            || source.empty() || target.empty()) {
+        ShowHelp(argv[0]);
+        return 1;
+    }
+
+    if (source[source.size() - 1] != '/')
+        source += "/";
 
     if (decode) {
-        ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSDecoder(required, numShares, source);
+        ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSDecoder(requiredShares, numShares, source);
     } else {
-        ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSEncoder(required, numShares, source);
+        ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSEncoder(requiredShares, numShares, source);
     }
 
     zfecfs_operations.getattr = zfecfs_getattr;
@@ -114,7 +175,8 @@ int main(int argc, char *argv[])
     zfecfs_operations.flag_nopath = 1;
     zfecfs_operations.flag_nullpath_ok = 1;
 
-    return fuse_main(argc, argv, &zfecfs_operations, NULL);
+    // TODO provide some fuse arguments
+    return fuse_main(fuseArgv.size(), fuseArgv.data(), &zfecfs_operations, NULL);
 }
 
 }
