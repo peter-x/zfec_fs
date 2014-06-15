@@ -62,11 +62,6 @@ int FileDecoder::Read(char *outBuffer, size_t size, off_t offset)
     return size;
 }
 
-off_t FileDecoder::Size() const
-{
-    return Size(metadata, encodedFileSize);
-}
-
 off_t FileDecoder::Size(const std::string& encodedFilePath)
 {
     File file(encodedFilePath);
@@ -77,14 +72,6 @@ off_t FileDecoder::Size(const std::string& encodedFilePath)
         throw SimpleException("Size cannot be read from file.");
 
     return Size(Metadata(buffer), file.Size());
-}
-
-off_t FileDecoder::Size(const Metadata &metadata, off_t encodedSize)
-{
-    const off_t extraSize = Metadata::size + (metadata.excessBytes == 0 ? 0 : 1);
-    if (encodedSize < extraSize)
-        throw SimpleException("Invalid encoded file.");
-    return (encodedSize - extraSize) * metadata.required + metadata.excessBytes;
 }
 
 void FileDecoder::NormalizeIndices(std::vector<const char*>& fecInputPtrs,

@@ -32,7 +32,10 @@ public:
 
     static FileDecoder* Open(const std::vector<std::string>& encodedFiles,
                              const FecWrapper& fecWrapper);
-    off_t Size() const;
+    off_t Size() const
+    {
+        return Size(metadata, encodedFileSize);
+    }
 
     static off_t Size(const std::string& encodedFilePath);
 
@@ -51,7 +54,13 @@ private:
     void NormalizeIndices(std::vector<const char*>& fecInputPtrs, std::vector<unsigned int>& indices);
     template <class TOutIter, class TInIter>
     TOutIter CopyToNthElement(TOutIter out, TOutIter outEnd, TInIter in, unsigned int stride) const;
-    static off_t Size(const Metadata& metadata, off_t encodedSize);
+    static off_t Size(const Metadata& metadata, off_t encodedSize)
+    {
+        const off_t extraSize = Metadata::size + (metadata.excessBytes == 0 ? 0 : 1);
+        if (encodedSize < extraSize)
+            throw SimpleException("Invalid encoded file.");
+        return (encodedSize - extraSize) * metadata.required + metadata.excessBytes;
+    }
 
     const std::vector<File> encodedFiles;
     const std::vector<unsigned char> fileIndices;
