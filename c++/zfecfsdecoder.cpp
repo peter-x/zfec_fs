@@ -18,12 +18,12 @@ namespace ZFecFS {
 
 int ZFecFSDecoder::Getattr(const char *path, struct stat *stbuf)
 {
+    if (path[0] != '/') return -ENOENT;
+
     try {
         std::string realPath = GetFirstPathMatchInAnyShare(path, stbuf);
-        if ((stbuf->st_mode & S_IFMT) == S_IFREG) {
-            DecodedFile* file = DecodedFile::Open(std::vector<std::string>(1, realPath), GetFecWrapper());
-            stbuf->st_size = file->Size();
-        }
+        if (S_ISREG(stbuf->st_mode))
+            stbuf->st_size = DecodedFile::Size(realPath);
     } catch (const std::exception& exc) {
         return -ENOENT;
     }
@@ -33,6 +33,8 @@ int ZFecFSDecoder::Getattr(const char *path, struct stat *stbuf)
 
 int ZFecFSDecoder::Opendir(const char* path, fuse_file_info* fileInfo)
 {
+    if (path[0] != '/') return -ENOENT;
+
     try {
         // check whether the directory exists in at least one share
         GetFirstPathMatchInAnyShare(path);
@@ -47,7 +49,7 @@ int ZFecFSDecoder::Opendir(const char* path, fuse_file_info* fileInfo)
 }
 
 int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
-                           off_t offset, fuse_file_info* fileInfo)
+                           off_t /*offset*/, fuse_file_info* fileInfo)
 {
     const std::string& path = *reinterpret_cast<std::string*>(fileInfo->fh);
 
@@ -61,16 +63,19 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
     while (true) {
         struct dirent* shareEntry = sourceDir.Readdir();
         if (shareEntry == NULL) break;
+        if (IsDotDirectory(shareEntry->d_name))
+            continue;
 
         potentialPath.resize(GetSource().size());
         potentialPath.append(shareEntry->d_name)
-                     .append("/")
                      .append(path);
         try {
             Directory sharedDir(potentialPath);
             while (true) {
                 struct dirent* entry = sharedDir.Readdir();
                 if (entry == NULL) break;
+                if (IsDotDirectory(entry->d_name))
+                    continue;
                 const bool inserted = entriesSeen.insert(entry->d_name).second;
                 if (inserted) {
                     std::string absolutePath = potentialPath;
@@ -78,8 +83,12 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                     absolutePath.append(entry->d_name);
                     st.st_ino = entry->d_ino;
                     st.st_mode = entry->d_type << 12;
-                    // TODO this is very expensive - do we really need it?
-                    st.st_size = DecodedFile::Size(absolutePath);
+                    if (S_ISREG(st.st_mode)) {
+                        // TODO this is very expensive - do we really need it?
+                        st.st_size = DecodedFile::Size(absolutePath);
+                    } else {
+                        st.st_size = 1;
+                    }
                     if (filler(buffer, entry->d_name, &st, 0) == 1)
                         return -EIO;
                 }
@@ -157,10 +166,11 @@ std::string ZFecFSDecoder::GetFirstPathMatchInAnyShare(const char* pathToFind,
     while (true) {
         struct dirent* entry = sourceDir.Readdir();
         if (entry == NULL) break;
+        if (IsDotDirectory(entry->d_name))
+            continue;
 
         potentialPath.resize(GetSource().size());
         potentialPath.append(entry->d_name)
-                     .append("/")
                      .append(pathToFind);
 
         if (lstat(potentialPath.c_str(), statBuf) == 0)

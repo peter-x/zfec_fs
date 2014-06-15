@@ -90,10 +90,10 @@ static struct fuse_operations zfecfs_operations;
 
 int main(int argc, char *argv[])
 {
-    bool decode = false;
+    bool decode = true;
     unsigned int required = 3;
     unsigned int numShares = 20;
-    const char* source = "/";///tmp/x/"; // TODO has to be /-terminated!
+    const char* source = "/tmp/x/";///tmp/enc/";///tmp/x/"; // TODO has to be /-terminated!
 
     if (decode) {
         ZFecFS::globalZFecFSInstance = new ZFecFS::ZFecFSDecoder(required, numShares, source);

@@ -38,6 +38,16 @@ public:
                    &index, 1,
                    length);
     }
+
+    //! @note that indices[i] == i must hold whenever indices[i] < required
+    void Decode(char*const* fecOutput, const char** fecInput, unsigned int* indices, unsigned int length) const
+    {
+        fec_decode(fecData,
+                   reinterpret_cast<const gf* const*>(fecInput),
+                   reinterpret_cast<gf* const*>(fecOutput),
+                   indices,
+                   length);
+    }
 };
 
 }

@@ -12,6 +12,7 @@
 #include "metadata.h"
 #include "mutex.h"
 #include "file.h"
+#include "threadlocalizer.h"
 
 namespace ZFecFS {
 
@@ -33,13 +34,6 @@ public:
     }
 
 private:
-    class ThreadLocalData {
-    public:
-        // TODO replace by data structure that does not initialize the data
-        std::vector<char> readBuffer;
-        std::vector<char> workBuffer;
-    };
-
     EncodedFile(const std::string& path,
                 DecodedPath::ShareIndex shareIndex,
                 const FecWrapper& fecWrapper)
@@ -49,12 +43,6 @@ private:
         , originalSize(0)
         , originalSizeSet(false)
     {
-    }
-
-    ThreadLocalData& GetThreadLocalData()
-    {
-        Mutex::Lock lock(mutex);
-        return threadLocalData[pthread_self()];
     }
 
     size_t AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset);
@@ -73,12 +61,18 @@ private:
     const File file;
     const DecodedPath::ShareIndex shareIndex;
 
+    class ThreadLocalData {
+    public:
+        // TODO replace by data structure that does not initialize the data
+        std::vector<char> readBuffer;
+        std::vector<char> workBuffer;
+    };
+
+    ThreadLocalizer<ThreadLocalData> threadLocalData;
+
     const FecWrapper& fecWrapper;
 
     mutable Mutex mutex;
-
-    std::map<pthread_t, ThreadLocalData> threadLocalData;
-
     mutable off_t originalSize;
     mutable bool originalSizeSet;
 };

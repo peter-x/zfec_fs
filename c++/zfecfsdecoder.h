@@ -32,7 +32,7 @@ public:
                      size_t size, off_t offset,
                      fuse_file_info *fileInfo) {
         try {
-            reinterpret_cast<DecodedFile*>(fileInfo->fh)->Read(outBuffer, size, offset);
+            return reinterpret_cast<DecodedFile*>(fileInfo->fh)->Read(outBuffer, size, offset);
         } catch (const std::exception& exc) {
             return -EIO;
         }

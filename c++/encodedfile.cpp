@@ -52,7 +52,7 @@ void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
 bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
-    std::vector<char> readBuffer(ThreadLocalData().readBuffer);
+    std::vector<char>& readBuffer(threadLocalData.Get().readBuffer);
     readBuffer.resize(size * sharesRequired);
 
     size_t sizeRead = file.Read(readBuffer.data(), size * sharesRequired, offset * sharesRequired);
@@ -69,7 +69,7 @@ bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
         outBuffer = CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
                                    readBuffer.begin() + shareIndex + sizeRead, sharesRequired);
     } else {
-        std::vector<char> workBuffer(ThreadLocalData().workBuffer);
+        std::vector<char>& workBuffer(threadLocalData.Get().workBuffer);
         workBuffer.resize(sizeRead);
 
         Distribute(workBuffer.begin(),

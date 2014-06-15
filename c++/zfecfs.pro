@@ -11,6 +11,7 @@ SOURCES += main.cpp fec.c \
     decodedfile.cpp
 CCFLAG += --std=c11
 HEADERS += \
+    fec.h \
     decodedpath.h \
     utils.h \
     zfecfs.h \
@@ -22,5 +23,6 @@ HEADERS += \
     decodedfile.h \
     mutex.h \
     directory.h \
-    file.h
+    file.h \
+    threadlocalizer.h
 

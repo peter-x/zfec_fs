@@ -19,6 +19,10 @@ private:
     const char* message;
 };
 
+inline bool IsDotDirectory(char* path)
+{
+    return path[0] == '.' && (path[1] == 0 || (path[1] == '.' && path[2] == 0));
+}
 
 struct Hex {
     static char EncodeDigit(const int number)

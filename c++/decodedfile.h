@@ -5,10 +5,13 @@
 
 #include <vector>
 #include <string>
+#include <map>
 
+#include "mutex.h"
 #include "fecwrapper.h"
 #include "metadata.h"
 #include "file.h"
+#include "threadlocalizer.h"
 
 namespace ZFecFS {
 
@@ -17,15 +20,19 @@ class DecodedFile
 public:
     static DecodedFile* Open(const std::vector<std::string>& encodedFiles,
                              const FecWrapper& fecWrapper);
-    size_t Size() const;
+    off_t Size() const;
 
-    static size_t Size(const std::string& encodedFilePath);
+    static off_t Size(const std::string& encodedFilePath);
 
     int Read(char* outBuffer, size_t size, off_t offset);
 private:
-    DecodedFile(const std::vector<File>& encodedFiles, Metadata metadata,
-                size_t encodedFileSize, const FecWrapper& fecWrapper)
+    DecodedFile(const std::vector<File>& encodedFiles,
+                const std::vector<unsigned char>& fileIndices,
+                Metadata metadata,
+                size_t encodedFileSize,
+                const FecWrapper& fecWrapper)
         : encodedFiles(encodedFiles)
+        , fileIndices(fileIndices)
         , metadata(metadata)
         , encodedFileSize(encodedFileSize)
         , fecWrapper(fecWrapper)
@@ -44,9 +51,22 @@ private:
         const FecWrapper& fecWrapper;
     };
 
-    static size_t Size(const Metadata& metadata, size_t encodedSize);
+    class ThreadLocalData {
+    public:
+        // TODO replace by data structure that does not initialize the data
+        std::vector<std::vector<char> > readBuffers;
+        std::vector<char> workBuffer;
+    };
+
+    ThreadLocalizer<ThreadLocalData> threadLocalData;
+
+    void NormalizeIndices(std::vector<const char*>& fecInputPtrs, std::vector<unsigned int>& indices);
+    template <class TOutIter, class TInIter>
+    TOutIter CopyToNthElement(TOutIter out, TOutIter outEnd, TInIter in, unsigned int stride) const;
+    static off_t Size(const Metadata& metadata, off_t encodedSize);
 
     const std::vector<File> encodedFiles;
+    const std::vector<unsigned char> fileIndices;
     const Metadata metadata;
     const size_t encodedFileSize;
     const FecWrapper& fecWrapper;
