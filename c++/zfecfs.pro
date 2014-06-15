@@ -6,9 +6,9 @@ DEFINES += _FILE_OFFSET_BITS=64
 LIBS += -lfuse
 SOURCES += main.cpp fec.c \
     zfecfsencoder.cpp \
-    encodedfile.cpp \
     zfecfsdecoder.cpp \
-    decodedfile.cpp
+    fileencoder.cpp \
+    filedecoder.cpp
 CCFLAG += --std=c11
 HEADERS += \
     fec.h \
@@ -16,13 +16,13 @@ HEADERS += \
     utils.h \
     zfecfs.h \
     zfecfsencoder.h \
-    encodedfile.h \
     fecwrapper.h \
     metadata.h \
     zfecfsdecoder.h \
-    decodedfile.h \
     mutex.h \
     directory.h \
     file.h \
-    threadlocalizer.h
+    threadlocalizer.h \
+    fileencoder.h \
+    filedecoder.h
 

@@ -9,7 +9,7 @@
 #include <string>
 
 #include "zfecfs.h"
-#include "decodedfile.h"
+#include "filedecoder.h"
 
 namespace ZFecFS {
 
@@ -32,7 +32,7 @@ public:
                      size_t size, off_t offset,
                      fuse_file_info *fileInfo) {
         try {
-            return reinterpret_cast<DecodedFile*>(fileInfo->fh)->Read(outBuffer, size, offset);
+            return FromHandle(fileInfo->fh)->Read(outBuffer, size, offset);
         } catch (const std::exception& exc) {
             return -EIO;
         }
@@ -40,8 +40,7 @@ public:
 
     virtual int Release(const char*, fuse_file_info *fileInfo)
     {
-        DecodedFile* file = reinterpret_cast<DecodedFile*>(fileInfo->fh);
-        delete file;
+        delete FromHandle(fileInfo->fh);
         return 0;
     }
 private:
@@ -50,6 +49,17 @@ private:
     std::vector<std::string> GetFirstNumPathMatchesInAnyShare(
                            const char* pathToFind, unsigned int numMatches,
                            struct stat* statBuf = NULL);
+    FileDecoder* CreateFileDecoder(const std::vector<File>& encodedFiles) const;
+    Metadata ReadMetadata(const File& file) const;
+
+    uint64_t ToHandle(FileDecoder* decoder) const
+    {
+        return reinterpret_cast<u_int64_t>(decoder);
+    }
+    FileDecoder* FromHandle(uint64_t handle) const
+    {
+        return reinterpret_cast<FileDecoder*>(handle);
+    }
 };
 
 } // namespace ZFecFS

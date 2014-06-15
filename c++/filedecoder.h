@@ -15,18 +15,10 @@
 
 namespace ZFecFS {
 
-class DecodedFile
+class FileDecoder
 {
 public:
-    static DecodedFile* Open(const std::vector<std::string>& encodedFiles,
-                             const FecWrapper& fecWrapper);
-    off_t Size() const;
-
-    static off_t Size(const std::string& encodedFilePath);
-
-    int Read(char* outBuffer, size_t size, off_t offset);
-private:
-    DecodedFile(const std::vector<File>& encodedFiles,
+    FileDecoder(const std::vector<File>& encodedFiles,
                 const std::vector<unsigned char>& fileIndices,
                 Metadata metadata,
                 size_t encodedFileSize,
@@ -38,19 +30,15 @@ private:
         , fecWrapper(fecWrapper)
     { }
 
-    class Constructor {
-    public:
-        Constructor(const std::vector<File>& encodedFiles,
-                    const FecWrapper& fecWrapper)
-            : encodedFiles(encodedFiles)
-            , fecWrapper(fecWrapper) {}
-        DecodedFile* CreateDecodedFile();
-    private:
-        Metadata ReadMetadataOfOneFile(unsigned int index) const;
-        std::vector<File> encodedFiles;
-        const FecWrapper& fecWrapper;
-    };
+    static FileDecoder* Open(const std::vector<std::string>& encodedFiles,
+                             const FecWrapper& fecWrapper);
+    off_t Size() const;
 
+    static off_t Size(const std::string& encodedFilePath);
+
+    int Read(char* outBuffer, size_t size, off_t offset);
+
+private:
     class ThreadLocalData {
     public:
         // TODO replace by data structure that does not initialize the data

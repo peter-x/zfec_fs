@@ -1,4 +1,4 @@
-#include "encodedfile.h"
+#include "fileencoder.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -14,14 +14,7 @@
 namespace ZFecFS {
 
 
-u_int64_t EncodedFile::Open(const DecodedPath& decodedPath, const FecWrapper& fecWrapper)
-{
-    return reinterpret_cast<u_int64_t>(new EncodedFile(decodedPath.path,
-                                                       decodedPath.index,
-                                                       fecWrapper));
-}
-
-int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
+int FileEncoder::Read(char* const outBuffer, size_t size, off_t offset)
 {
     if (size == 0) return 0;
 
@@ -40,7 +33,7 @@ int EncodedFile::Read(char* const outBuffer, size_t size, off_t offset)
     return outBufferPos - outBuffer;
 }
 
-void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
+void FileEncoder::FillMetadata(char*& outBuffer, size_t size, off_t offset)
 {
     if (offset < off_t(Metadata::size)) {
         Metadata meta(fecWrapper.GetSharesRequired(), shareIndex, OriginalSize());
@@ -49,7 +42,7 @@ void EncodedFile::FillMetadata(char*& outBuffer, size_t size, off_t offset)
     }
 }
 
-bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
+bool FileEncoder::FillData(char*& outBuffer, size_t size, off_t offset)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
     std::vector<char>& readBuffer(threadLocalData.Get().readBuffer);
@@ -87,7 +80,7 @@ bool EncodedFile::FillData(char*& outBuffer, size_t size, off_t offset)
     return true;
 }
 
-size_t EncodedFile::AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset)
+size_t FileEncoder::AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
     int excessBytes = sizeRead % sharesRequired;
@@ -106,7 +99,7 @@ size_t EncodedFile::AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRea
     return sizeRead;
 }
 
-off_t EncodedFile::OriginalSize() const
+off_t FileEncoder::OriginalSize() const
 {
     Mutex::Lock lock(mutex);
 
@@ -118,7 +111,7 @@ off_t EncodedFile::OriginalSize() const
 }
 
 template <class TOutIter, class TInIter>
-TOutIter EncodedFile::CopyNthElement(TOutIter out, TInIter in, const TInIter end,
+TOutIter FileEncoder::CopyNthElement(TOutIter out, TInIter in, const TInIter end,
                                  unsigned int stride) const
 {
     while (in < end) {
@@ -129,7 +122,7 @@ TOutIter EncodedFile::CopyNthElement(TOutIter out, TInIter in, const TInIter end
 }
 
 template <class TOutIter, class TInIter>
-void EncodedFile::Distribute(TOutIter out, TInIter in, const TInIter end,
+void FileEncoder::Distribute(TOutIter out, TInIter in, const TInIter end,
                              unsigned int chunks) const
 {
     assert((end - in) % chunks == 0);

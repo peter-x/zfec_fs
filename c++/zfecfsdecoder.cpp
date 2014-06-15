@@ -6,12 +6,13 @@
 #include <string.h>
 #include <stdint.h>
 
+#include <iostream>
 #include <string>
 #include <algorithm>
 #include <tr1/unordered_set>
 
 #include "directory.h"
-#include "decodedfile.h"
+#include "filedecoder.h"
 #include "utils.h"
 
 namespace ZFecFS {
@@ -23,7 +24,7 @@ int ZFecFSDecoder::Getattr(const char *path, struct stat *stbuf)
     try {
         std::string realPath = GetFirstPathMatchInAnyShare(path, stbuf);
         if (S_ISREG(stbuf->st_mode))
-            stbuf->st_size = DecodedFile::Size(realPath);
+            stbuf->st_size = FileDecoder::Size(realPath);
     } catch (const std::exception& exc) {
         return -ENOENT;
     }
@@ -87,7 +88,7 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
                     st.st_mode = entry->d_type << 12;
                     if (S_ISREG(st.st_mode)) {
                         // TODO this is very expensive - do we really need it?
-                        st.st_size = DecodedFile::Size(absolutePath);
+                        st.st_size = FileDecoder::Size(absolutePath);
                     } else {
                         st.st_size = 1;
                     }
@@ -116,8 +117,10 @@ int ZFecFSDecoder::Open(const char *path, fuse_file_info *fileInfo)
         std::vector<std::string> paths = GetFirstNumPathMatchesInAnyShare(path,
                                                                           GetFecWrapper().GetSharesRequired(),
                                                                           &statBuf);
-        DecodedFile* file = DecodedFile::Open(paths, GetFecWrapper());
-        fileInfo->fh = reinterpret_cast<u_int64_t>(file);
+        if (paths.size() < fecWrapper.GetSharesRequired() || fecWrapper.GetSharesRequired() < 1)
+            throw SimpleException("Not enough encoded files.");
+
+        fileInfo->fh = ToHandle(CreateFileDecoder(std::vector<File>(paths.begin(), paths.end())));
     } catch (const std::exception& exc) {
         return -ENOENT;
     }
@@ -180,6 +183,44 @@ std::string ZFecFSDecoder::GetFirstPathMatchInAnyShare(const char* pathToFind,
     }
 
     throw SimpleException("File not found in any share.");
+}
+
+FileDecoder* ZFecFSDecoder::CreateFileDecoder(const std::vector<File>& encodedFiles) const
+{
+    if (encodedFiles.empty())
+        throw SimpleException("Too few encoded files.");
+
+    off_t encodedSize = encodedFiles.front().Size();
+    std::vector<unsigned char> fileIndices(encodedFiles.size());
+    Metadata firstMeta = ReadMetadata(encodedFiles[0]);
+    fileIndices[0] = firstMeta.index;
+    for (unsigned int i = 1; i < encodedFiles.size(); ++i) {
+        Metadata meta = ReadMetadata(encodedFiles[i]);
+        if (meta.required != firstMeta.required)
+            throw SimpleException("Inconsistent metadata (required).");
+        if (meta.excessBytes != firstMeta.excessBytes)
+            throw SimpleException("Inconsistent metadata (excessBytes).");
+        if (encodedFiles[i].Size() != encodedSize)
+            throw SimpleException("Inconsistent file sizes.");
+        fileIndices[i] = meta.index;
+    }
+    if (firstMeta.required != fecWrapper.GetSharesRequired())
+        throw SimpleException("'required'-value not consistent with filesystem.");
+    if (firstMeta.excessBytes >= firstMeta.required || encodedSize < off_t(Metadata::size))
+        throw SimpleException("Invalid 'excessBytes'-value");
+
+    return new FileDecoder(encodedFiles, fileIndices,
+                           firstMeta, encodedSize, fecWrapper);
+}
+
+Metadata ZFecFSDecoder::ReadMetadata(const File& file) const
+{
+    char buffer[Metadata::size];
+    size_t sizeRead = file.Read(buffer, Metadata::size, 0);
+    if (sizeRead != Metadata::size)
+        throw SimpleException("Unable to read metadata.");
+
+    return Metadata(buffer);
 }
 
 } // namespace ZFecFS

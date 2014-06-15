@@ -14,7 +14,7 @@
 #include "utils.h"
 #include "decodedpath.h"
 #include "directory.h"
-#include "encodedfile.h"
+#include "fileencoder.h"
 
 namespace ZFecFS {
 
@@ -27,7 +27,7 @@ int ZFecFSEncoder::Getattr(const char* path, struct stat* stbuf)
             if (lstat(decodedPath.path.c_str(), stbuf) == -1)
                 return -errno;
             if ((stbuf->st_mode & S_IFMT) == S_IFREG)
-                stbuf->st_size = EncodedFile::Size(stbuf->st_size, sharesRequired);
+                stbuf->st_size = FileEncoder::Size(stbuf->st_size, sharesRequired);
         } else {
             memset(stbuf, 0, sizeof(struct stat));
             stbuf->st_mode = S_IFDIR | 0755;
@@ -83,7 +83,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
             for (struct dirent* entry = dir.Readdir(); entry != NULL; entry = dir.Readdir()) {
                 st.st_ino = entry->d_ino;
                 st.st_mode = entry->d_type << 12;
-                st.st_size = EncodedFile::Size(st.st_size, sharesRequired);
+                st.st_size = FileEncoder::Size(st.st_size, sharesRequired);
 
                 if (filler(buffer, entry->d_name, &st, dir.Telldir()) == 1)
                     break;
@@ -116,7 +116,9 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
 
         fileInfo->fh = 0;
         try {
-            fileInfo->fh = EncodedFile::Open(decodedPath, GetFecWrapper());
+            fileInfo->fh = ToHandle(new FileEncoder(File(decodedPath.path),
+                                                    decodedPath.index,
+                                                    GetFecWrapper()));
         } catch (const std::exception& exc) {
             return -errno;
         }

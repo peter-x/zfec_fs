@@ -16,13 +16,18 @@
 
 namespace ZFecFS {
 
-class EncodedFile
+class FileEncoder
 {
 public:
-    static u_int64_t Open(const DecodedPath& decodedPath, const FecWrapper& fecWrapper);
-    static EncodedFile* FromHandle(u_int64_t handle)
+    FileEncoder(const File& file,
+                DecodedPath::ShareIndex shareIndex,
+                const FecWrapper& fecWrapper)
+        : file(file)
+        , shareIndex(shareIndex)
+        , fecWrapper(fecWrapper)
+        , originalSize(0)
+        , originalSizeSet(false)
     {
-        return reinterpret_cast<EncodedFile*>(handle);
     }
 
     int Read(char* outBuffer, size_t size, off_t offset);
@@ -34,17 +39,6 @@ public:
     }
 
 private:
-    EncodedFile(const std::string& path,
-                DecodedPath::ShareIndex shareIndex,
-                const FecWrapper& fecWrapper)
-        : file(path)
-        , shareIndex(shareIndex)
-        , fecWrapper(fecWrapper)
-        , originalSize(0)
-        , originalSizeSet(false)
-    {
-    }
-
     size_t AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRead, off_t offset);
     off_t OriginalSize() const;
 

@@ -8,7 +8,7 @@
 #include <exception>
 
 #include "zfecfs.h"
-#include "encodedfile.h"
+#include "fileencoder.h"
 
 namespace ZFecFS {
 
@@ -33,16 +33,25 @@ public:
                      fuse_file_info *fileInfo)
     {
         try {
-            return EncodedFile::FromHandle(fileInfo->fh)->Read(outBuffer, size, offset);
+            return FromHandle(fileInfo->fh)->Read(outBuffer, size, offset);
         } catch (const std::exception& exc) {
             return -EIO;
         }
     }
     virtual int Release(const char*, fuse_file_info *fileInfo)
     {
-        delete EncodedFile::FromHandle(fileInfo->fh);
+        delete FromHandle(fileInfo->fh);
         fileInfo->fh = 0;
         return 0;
+    }
+private:
+    uint64_t ToHandle(FileEncoder* encoder) const
+    {
+        return reinterpret_cast<uint64_t>(encoder);
+    }
+    FileEncoder* FromHandle(uint64_t handle) const
+    {
+        return reinterpret_cast<FileEncoder*>(handle);
     }
 };
 

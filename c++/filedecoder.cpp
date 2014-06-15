@@ -1,4 +1,4 @@
-#include "decodedfile.h"
+#include "filedecoder.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -13,7 +13,7 @@
 
 namespace ZFecFS {
 
-int DecodedFile::Read(char *outBuffer, size_t size, off_t offset)
+int FileDecoder::Read(char *outBuffer, size_t size, off_t offset)
 {
     if (offset >= Size())
         return 0;
@@ -62,27 +62,12 @@ int DecodedFile::Read(char *outBuffer, size_t size, off_t offset)
     return size;
 }
 
-DecodedFile* DecodedFile::Open(const std::vector<std::string>& encodedFiles,
-                               const FecWrapper& fecWrapper)
-{
-    if (encodedFiles.size() < fecWrapper.GetSharesRequired()
-                            || fecWrapper.GetSharesRequired() < 1)
-        throw SimpleException("Not enough encoded files.");
-
-    std::vector<File> files;
-    for (unsigned int i = 0; i < encodedFiles.size(); ++i)
-        files.push_back(File(encodedFiles[i]));
-
-    Constructor constructor(files, fecWrapper);
-    return constructor.CreateDecodedFile();
-}
-
-off_t DecodedFile::Size() const
+off_t FileDecoder::Size() const
 {
     return Size(metadata, encodedFileSize);
 }
 
-off_t DecodedFile::Size(const std::string& encodedFilePath)
+off_t FileDecoder::Size(const std::string& encodedFilePath)
 {
     File file(encodedFilePath);
 
@@ -94,7 +79,7 @@ off_t DecodedFile::Size(const std::string& encodedFilePath)
     return Size(Metadata(buffer), file.Size());
 }
 
-off_t DecodedFile::Size(const Metadata &metadata, off_t encodedSize)
+off_t FileDecoder::Size(const Metadata &metadata, off_t encodedSize)
 {
     const off_t extraSize = Metadata::size + (metadata.excessBytes == 0 ? 0 : 1);
     if (encodedSize < extraSize)
@@ -102,46 +87,7 @@ off_t DecodedFile::Size(const Metadata &metadata, off_t encodedSize)
     return (encodedSize - extraSize) * metadata.required + metadata.excessBytes;
 }
 
-DecodedFile* DecodedFile::Constructor::CreateDecodedFile()
-{
-    if (encodedFiles.empty())
-        throw SimpleException("Too few encoded files.");
-
-    off_t encodedSize = encodedFiles.front().Size();
-    std::vector<unsigned char> fileIndices(encodedFiles.size());
-    Metadata firstMeta = ReadMetadataOfOneFile(0);
-    fileIndices[0] = firstMeta.index;
-    for (unsigned int i = 1; i < encodedFiles.size(); ++i) {
-        Metadata meta = ReadMetadataOfOneFile(i);
-        if (meta.required != firstMeta.required)
-            throw SimpleException("Inconsistent metadata (required).");
-        if (meta.excessBytes != firstMeta.excessBytes)
-            throw SimpleException("Inconsistent metadata (excessBytes).");
-        if (encodedFiles[i].Size() != encodedSize)
-            throw SimpleException("Inconsistent file sizes.");
-        fileIndices[i] = meta.index;
-    }
-    if (firstMeta.required != fecWrapper.GetSharesRequired())
-        throw SimpleException("'required'-value not consistent with filesystem.");
-    if (firstMeta.excessBytes >= firstMeta.required || encodedSize < off_t(Metadata::size))
-        throw SimpleException("Invalid 'excessBytes'-value");
-
-    return new DecodedFile(encodedFiles, fileIndices,
-                           firstMeta, encodedSize, fecWrapper);
-}
-
-Metadata DecodedFile::Constructor::ReadMetadataOfOneFile(unsigned int index) const
-{
-    char buffer[Metadata::size];
-    size_t sizeRead = encodedFiles[index].Read(buffer, Metadata::size, 0);
-    if (sizeRead != Metadata::size)
-        throw SimpleException("Unable to read metadata.");
-
-    return Metadata(buffer);
-}
-
-
-void DecodedFile::NormalizeIndices(std::vector<const char*>& fecInputPtrs,
+void FileDecoder::NormalizeIndices(std::vector<const char*>& fecInputPtrs,
                                    std::vector<unsigned int>& indices)
 {
     unsigned int sharesRequired = fecWrapper.GetSharesRequired();
@@ -159,7 +105,7 @@ void DecodedFile::NormalizeIndices(std::vector<const char*>& fecInputPtrs,
 }
 
 template <class TOutIter, class TInIter>
-TOutIter DecodedFile::CopyToNthElement(TOutIter out, TOutIter outEnd, TInIter in,
+TOutIter FileDecoder::CopyToNthElement(TOutIter out, TOutIter outEnd, TInIter in,
                                        unsigned int stride) const
 {
     while (out < outEnd) {
