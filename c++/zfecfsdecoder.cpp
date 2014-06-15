@@ -59,6 +59,8 @@ int ZFecFSDecoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
     struct stat st;
     memset(&st, 0, sizeof(st));
 
+    filler(buffer, ".", NULL, 0);
+    filler(buffer, "..", NULL, 0);
     std::string potentialPath = GetSource();
     while (true) {
         struct dirent* shareEntry = sourceDir.Readdir();
