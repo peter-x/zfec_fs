@@ -6,8 +6,8 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <boost/ptr_container/ptr_vector.hpp>
 
-#include "mutex.h"
 #include "fecwrapper.h"
 #include "metadata.h"
 #include "file.h"
@@ -18,7 +18,7 @@ namespace ZFecFS {
 class FileDecoder
 {
 public:
-    FileDecoder(const std::vector<File>& encodedFiles,
+    FileDecoder(const std::vector<boost::shared_ptr<File> >& encodedFiles,
                 const std::vector<unsigned char>& fileIndices,
                 Metadata metadata,
                 size_t encodedFileSize,
@@ -62,7 +62,7 @@ private:
         return (encodedSize - extraSize) * metadata.required + metadata.excessBytes;
     }
 
-    const std::vector<File> encodedFiles;
+    const std::vector<boost::shared_ptr<File> > encodedFiles;
     const std::vector<unsigned char> fileIndices;
     const Metadata metadata;
     const size_t encodedFileSize;

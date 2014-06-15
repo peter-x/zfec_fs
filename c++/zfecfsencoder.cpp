@@ -11,6 +11,8 @@
 
 #include <pthread.h>
 
+#include <boost/make_shared.hpp>
+
 #include "utils.h"
 #include "decodedpath.h"
 #include "directory.h"
@@ -75,7 +77,7 @@ int ZFecFSEncoder::Readdir(const char*, void* buffer, fuse_fill_dir_t filler,
             }
         } else {
             Directory& dir = *reinterpret_cast<Directory*>(fileInfo->fh);
-            Mutex::Lock lock(dir.GetMutex());
+            boost::lock_guard<boost::mutex> lock(dir.GetMutex());
 
             if (offset != 0)
                 dir.Seek(offset);
@@ -116,7 +118,7 @@ int ZFecFSEncoder::Open(const char* path, fuse_file_info* fileInfo)
 
         fileInfo->fh = 0;
         try {
-            fileInfo->fh = ToHandle(new FileEncoder(File(decodedPath.path),
+            fileInfo->fh = ToHandle(new FileEncoder(boost::make_shared<File>(decodedPath.path),
                                                     decodedPath.index,
                                                     GetFecWrapper()));
         } catch (const std::exception& exc) {

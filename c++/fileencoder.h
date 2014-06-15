@@ -10,7 +10,6 @@
 #include "fecwrapper.h"
 #include "decodedpath.h"
 #include "metadata.h"
-#include "mutex.h"
 #include "file.h"
 #include "threadlocalizer.h"
 
@@ -19,7 +18,7 @@ namespace ZFecFS {
 class FileEncoder
 {
 public:
-    FileEncoder(const File& file,
+    FileEncoder(const boost::shared_ptr<File>& file,
                 DecodedPath::ShareIndex shareIndex,
                 const FecWrapper& fecWrapper)
         : file(file)
@@ -52,7 +51,7 @@ private:
 
     const static size_t transformBatchSize = 8192;
 
-    const File file;
+    const boost::shared_ptr<File> file;
     const DecodedPath::ShareIndex shareIndex;
 
     class ThreadLocalData {
@@ -66,7 +65,7 @@ private:
 
     const FecWrapper& fecWrapper;
 
-    mutable Mutex mutex;
+    mutable boost::mutex mutex;
     mutable off_t originalSize;
     mutable bool originalSizeSet;
 };

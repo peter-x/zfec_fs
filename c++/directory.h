@@ -6,13 +6,14 @@
 #include <stdint.h>
 
 #include <string>
+#include <boost/thread/mutex.hpp>
+#include <boost/utility.hpp>
 
 #include "utils.h"
-#include "mutex.h"
 
 namespace ZFecFS {
 
-class Directory
+class Directory : boost::noncopyable
 {
 public:
     Directory(const std::string& path)
@@ -41,13 +42,13 @@ public:
         return telldir(dir);
     }
 
-    Mutex& GetMutex()
+    boost::mutex& GetMutex()
     {
         return mutex;
     }
 private:
 
-    Mutex mutex;
+    boost::mutex mutex;
     DIR* dir;
 };
 

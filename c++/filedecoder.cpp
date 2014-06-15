@@ -28,7 +28,7 @@ int FileDecoder::Read(char *outBuffer, size_t size, off_t offset)
     readBuffers.resize(sharesRequired);
     for (unsigned int i = 0; i < sharesRequired; ++i) {
         readBuffers[i].resize(bytesToRead);
-        int bytesRead = encodedFiles[i].Read(readBuffers[i].data(), bytesToRead,
+        int bytesRead = encodedFiles[i]->Read(readBuffers[i].data(), bytesToRead,
                                              offset / sharesRequired + Metadata::size);
         minBytesRead = std::min(minBytesRead, bytesRead);
     }

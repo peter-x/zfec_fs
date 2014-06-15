@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include <boost/thread/lock_guard.hpp>
+
 // TODO make everyting large-file-proof
 
 namespace ZFecFS {
@@ -48,7 +50,7 @@ bool FileEncoder::FillData(char*& outBuffer, size_t size, off_t offset)
     std::vector<char>& readBuffer(threadLocalData.Get().readBuffer);
     readBuffer.resize(size * sharesRequired);
 
-    size_t sizeRead = file.Read(readBuffer.data(), size * sharesRequired, offset * sharesRequired);
+    size_t sizeRead = file->Read(readBuffer.data(), size * sharesRequired, offset * sharesRequired);
     if (sizeRead == 0)
         return false;
     sizeRead = std::min(sizeRead, size * sharesRequired);
@@ -101,10 +103,10 @@ size_t FileEncoder::AdjustDataSize(std::vector<char>& readBuffer, size_t sizeRea
 
 off_t FileEncoder::OriginalSize() const
 {
-    Mutex::Lock lock(mutex);
+    boost::lock_guard<boost::mutex> lock(mutex);
 
     if (!originalSizeSet) {
-        originalSize = file.Size();
+        originalSize = file->Size();
         originalSizeSet = true;
     }
     return originalSize;

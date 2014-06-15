@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <tr1/unordered_set>
 
+#include <boost/foreach.hpp>
+#include <boost/make_shared.hpp>
+
 #include "directory.h"
 #include "filedecoder.h"
 #include "utils.h"
@@ -120,7 +123,12 @@ int ZFecFSDecoder::Open(const char *path, fuse_file_info *fileInfo)
         if (paths.size() < fecWrapper.GetSharesRequired() || fecWrapper.GetSharesRequired() < 1)
             throw SimpleException("Not enough encoded files.");
 
-        fileInfo->fh = ToHandle(CreateFileDecoder(std::vector<File>(paths.begin(), paths.end())));
+        // TODO vector of shared_ptr is not nice...
+        std::vector<boost::shared_ptr<File> > files;
+        BOOST_FOREACH(const std::string& path, paths)
+            files.push_back(boost::make_shared<File>(path));
+
+        fileInfo->fh = ToHandle(CreateFileDecoder(files));
     } catch (const std::exception& exc) {
         return -ENOENT;
     }
@@ -185,22 +193,22 @@ std::string ZFecFSDecoder::GetFirstPathMatchInAnyShare(const char* pathToFind,
     throw SimpleException("File not found in any share.");
 }
 
-FileDecoder* ZFecFSDecoder::CreateFileDecoder(const std::vector<File>& encodedFiles) const
+FileDecoder* ZFecFSDecoder::CreateFileDecoder(const std::vector<boost::shared_ptr<File> >& encodedFiles) const
 {
     if (encodedFiles.empty())
         throw SimpleException("Too few encoded files.");
 
-    off_t encodedSize = encodedFiles.front().Size();
+    off_t encodedSize = encodedFiles.front()->Size();
     std::vector<unsigned char> fileIndices(encodedFiles.size());
-    Metadata firstMeta = ReadMetadata(encodedFiles[0]);
+    Metadata firstMeta = ReadMetadata(*encodedFiles[0]);
     fileIndices[0] = firstMeta.index;
     for (unsigned int i = 1; i < encodedFiles.size(); ++i) {
-        Metadata meta = ReadMetadata(encodedFiles[i]);
+        Metadata meta = ReadMetadata(*encodedFiles[i]);
         if (meta.required != firstMeta.required)
             throw SimpleException("Inconsistent metadata (required).");
         if (meta.excessBytes != firstMeta.excessBytes)
             throw SimpleException("Inconsistent metadata (excessBytes).");
-        if (encodedFiles[i].Size() != encodedSize)
+        if (encodedFiles[i]->Size() != encodedSize)
             throw SimpleException("Inconsistent file sizes.");
         fileIndices[i] = meta.index;
     }

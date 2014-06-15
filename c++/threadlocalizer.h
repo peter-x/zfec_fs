@@ -1,11 +1,10 @@
 #ifndef ZFECFS_THREADLOCALIZER_H
 #define ZFECFS_THREADLOCALIZER_H
 
-#include <pthread.h>
-
 #include <map>
 
-#include "mutex.h"
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/lock_guard.hpp>
 
 namespace ZFecFS {
 
@@ -15,12 +14,12 @@ class ThreadLocalizer
 public:
     ThreadLocalData& Get()
     {
-        Mutex::Lock lock(mutex);
+        boost::lock_guard<boost::mutex> lock(mutex);
         return threadLocalData[pthread_self()];
     }
 
 private:
-    mutable Mutex mutex;
+    boost::mutex mutex;
     std::map<pthread_t, ThreadLocalData> threadLocalData;
 };
 

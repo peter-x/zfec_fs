@@ -8,49 +8,31 @@
 
 #include <string>
 
+#include <boost/utility.hpp>
+#include <boost/shared_ptr.hpp>
+
 #include "utils.h"
 
 namespace ZFecFS {
 
-class File
+class File : boost::noncopyable
 {
 public:
-    File() { data = 0; }
     explicit File(const std::string& path)
     {
-        data = new Data();
-        int handle = open(path.c_str(), O_RDONLY);
-        if (handle == -1) {
-            delete data;
+        handle = open(path.c_str(), O_RDONLY);
+        if (handle == -1)
             throw SimpleException("Error opening file.");
-        }
-        data->handle = handle;
     }
     ~File()
     {
-        if (data == 0) return;
-
-        data->refCount--;
-        if (data->refCount == 0) {
-            close(data->handle);
-            delete data;
-        }
-    }
-    File(const File& other)
-    {
-        data = other.data;
-        data->refCount++;
-    }
-    File& operator=(const File& other)
-    {
-        data = other.data;
-        data->refCount++;
-        return *this;
+        if (handle != -1)
+            close(handle);
     }
 
     ssize_t Read(char* buffer, size_t size, off_t offset) const
     {
-        ssize_t sizeRead = pread(data->handle, buffer, size, offset);
+        ssize_t sizeRead = pread(handle, buffer, size, offset);
         if (sizeRead == -1)
             throw SimpleException("Error reading file.");
         return sizeRead;
@@ -58,19 +40,13 @@ public:
 
     off_t Size() const
     {
-        off_t size = lseek(data->handle, 0, SEEK_END);
+        off_t size = lseek(handle, 0, SEEK_END);
         if (size == off_t(-1))
             throw SimpleException("File size could not be determined.");
         return size;
     }
 private:
-    struct Data {
-        unsigned int refCount;
-        int handle;
-        Data() : refCount(1), handle(-1) {}
-    };
-
-    mutable Data* data;
+    int handle;
 };
 
 } // namespace ZFecFS
