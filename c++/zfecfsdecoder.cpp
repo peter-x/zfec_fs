@@ -217,7 +217,8 @@ FileDecoder* ZFecFSDecoder::CreateFileDecoder(const std::vector<boost::shared_pt
     if (firstMeta.excessBytes >= firstMeta.required || encodedSize < off_t(Metadata::size))
         throw SimpleException("Invalid 'excessBytes'-value");
 
-    return new FileDecoder(encodedFiles, fileIndices,
+    return new FileDecoder(std::vector<boost::shared_ptr<AbstractFile> >(encodedFiles.begin(), encodedFiles.end()),
+                           fileIndices,
                            firstMeta, encodedSize, fecWrapper);
 }
 

@@ -68,7 +68,7 @@ off_t FileDecoder::Size(const std::string& encodedFilePath)
 
     char buffer[Metadata::size];
     ssize_t sizeRead = file.Read(buffer, Metadata::size, 0);
-    if (sizeRead != Metadata::size)
+    if (sizeRead != ssize_t(Metadata::size))
         throw SimpleException("Size cannot be read from file.");
 
     return Size(Metadata(buffer), file.Size());

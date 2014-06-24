@@ -12,7 +12,7 @@ public:
     const unsigned char index;
     const unsigned char excessBytes;
 
-    static const size_t size = 3;
+    static const size_t size;
 public:
     explicit Metadata(const char* data)
         : required(data[0])

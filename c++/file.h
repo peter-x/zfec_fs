@@ -15,7 +15,15 @@
 
 namespace ZFecFS {
 
-class File : boost::noncopyable
+class AbstractFile
+{
+public:
+    virtual ~AbstractFile() {}
+    virtual ssize_t Read(char* buffer, size_t size, off_t offset) const = 0;
+    virtual off_t Size() const = 0;
+};
+
+class File : public AbstractFile, boost::noncopyable
 {
 public:
     explicit File(const std::string& path)
@@ -30,7 +38,7 @@ public:
             close(handle);
     }
 
-    ssize_t Read(char* buffer, size_t size, off_t offset) const
+    virtual ssize_t Read(char* buffer, size_t size, off_t offset) const
     {
         ssize_t sizeRead = pread(handle, buffer, size, offset);
         if (sizeRead == -1)
@@ -38,7 +46,7 @@ public:
         return sizeRead;
     }
 
-    off_t Size() const
+    virtual off_t Size() const
     {
         off_t size = lseek(handle, 0, SEEK_END);
         if (size == off_t(-1))

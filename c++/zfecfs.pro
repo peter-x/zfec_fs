@@ -8,7 +8,8 @@ SOURCES += fec.c \
     zfecfsencoder.cpp \
     zfecfsdecoder.cpp \
     fileencoder.cpp \
-    filedecoder.cpp
+    filedecoder.cpp \
+    metadata.cpp
 CCFLAG += --std=c11 -O2
 HEADERS += \
     fec.h \
@@ -23,10 +24,13 @@ HEADERS += \
     file.h \
     threadlocalizer.h \
     fileencoder.h \
-    filedecoder.h
+    filedecoder.h \
+    test/testfile.h
 
 test {
     SOURCES += test/encodertest.cpp
+    DEFINES += BOOST_TEST_MAIN BOOST_TEST_DYN_LINK
+    TARGET = zfecfs_unittest
 } else {
     SOURCES += main.cpp
     LIBS += -lfuse

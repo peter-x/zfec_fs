@@ -18,7 +18,7 @@ namespace ZFecFS {
 class FileEncoder
 {
 public:
-    FileEncoder(const boost::shared_ptr<File>& file,
+    FileEncoder(const boost::shared_ptr<AbstractFile>& file,
                 DecodedPath::ShareIndex shareIndex,
                 const FecWrapper& fecWrapper)
         : file(file)
@@ -51,7 +51,7 @@ private:
 
     const static size_t transformBatchSize = 8192;
 
-    const boost::shared_ptr<File> file;
+    const boost::shared_ptr<AbstractFile> file;
     const DecodedPath::ShareIndex shareIndex;
 
     class ThreadLocalData {

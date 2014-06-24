@@ -18,7 +18,7 @@ namespace ZFecFS {
 class FileDecoder
 {
 public:
-    FileDecoder(const std::vector<boost::shared_ptr<File> >& encodedFiles,
+    FileDecoder(const std::vector<boost::shared_ptr<AbstractFile> >& encodedFiles,
                 const std::vector<unsigned char>& fileIndices,
                 Metadata metadata,
                 size_t encodedFileSize,
@@ -62,7 +62,7 @@ private:
         return (encodedSize - extraSize) * metadata.required + metadata.excessBytes;
     }
 
-    const std::vector<boost::shared_ptr<File> > encodedFiles;
+    const std::vector<boost::shared_ptr<AbstractFile> > encodedFiles;
     const std::vector<unsigned char> fileIndices;
     const Metadata metadata;
     const size_t encodedFileSize;
