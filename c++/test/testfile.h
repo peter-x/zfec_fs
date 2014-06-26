@@ -15,6 +15,11 @@ public:
         : contents(contents)
     {}
 
+    template <typename Container>
+    explicit TestFile(const Container& contents)
+        : contents(contents.begin(), contents.end())
+    {}
+
     virtual ssize_t Read(char* buffer, size_t size, off_t offset) const
     {
         if (offset >= off_t(contents.size())) return 0;

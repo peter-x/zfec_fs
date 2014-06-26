@@ -24,11 +24,11 @@ HEADERS += \
     file.h \
     threadlocalizer.h \
     fileencoder.h \
-    filedecoder.h \
-    test/testfile.h
+    filedecoder.h
 
 test {
-    SOURCES += test/encodertest.cpp
+    SOURCES += test/unittest.cpp
+    HEADERS += test/testfile.h
     DEFINES += BOOST_TEST_MAIN BOOST_TEST_DYN_LINK
     TARGET = zfecfs_unittest
 } else {

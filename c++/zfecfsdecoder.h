@@ -49,8 +49,6 @@ private:
     std::vector<std::string> GetFirstNumPathMatchesInAnyShare(
                            const char* pathToFind, unsigned int numMatches,
                            struct stat* statBuf = NULL);
-    FileDecoder* CreateFileDecoder(const std::vector<boost::shared_ptr<File> >& encodedFiles) const;
-    Metadata ReadMetadata(const File& file) const;
 
     uint64_t ToHandle(FileDecoder* decoder) const
     {

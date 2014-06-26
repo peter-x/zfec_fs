@@ -13,6 +13,44 @@
 
 namespace ZFecFS {
 
+inline
+Metadata ReadMetadata(const AbstractFile& file)
+{
+    char buffer[Metadata::size];
+    size_t sizeRead = file.Read(buffer, Metadata::size, 0);
+    if (sizeRead != Metadata::size)
+        throw SimpleException("Unable to read metadata.");
+
+    return Metadata(buffer);
+}
+
+FileDecoder* FileDecoder::Open(const std::vector<boost::shared_ptr<AbstractFile> >& encodedFiles, const FecWrapper& fecWrapper)
+{
+    if (encodedFiles.empty())
+        throw SimpleException("Too few encoded files.");
+
+    off_t encodedSize = encodedFiles.front()->Size();
+    std::vector<unsigned char> fileIndices(encodedFiles.size());
+    Metadata firstMeta = ReadMetadata(*encodedFiles[0]);
+    fileIndices[0] = firstMeta.index;
+    for (unsigned int i = 1; i < encodedFiles.size(); ++i) {
+        Metadata meta = ReadMetadata(*encodedFiles[i]);
+        if (meta.required != firstMeta.required)
+            throw SimpleException("Inconsistent metadata (required).");
+        if (meta.excessBytes != firstMeta.excessBytes)
+            throw SimpleException("Inconsistent metadata (excessBytes).");
+        if (encodedFiles[i]->Size() != encodedSize)
+            throw SimpleException("Inconsistent file sizes.");
+        fileIndices[i] = meta.index;
+    }
+    if (firstMeta.required != fecWrapper.GetSharesRequired())
+        throw SimpleException("'required'-value not consistent with filesystem.");
+    if (firstMeta.excessBytes >= firstMeta.required || encodedSize < off_t(Metadata::size))
+        throw SimpleException("Invalid 'excessBytes'-value");
+
+    return new FileDecoder(encodedFiles, fileIndices, firstMeta, encodedSize, fecWrapper);
+}
+
 int FileDecoder::Read(char *outBuffer, size_t size, off_t offset)
 {
     if (offset >= Size())
@@ -56,8 +94,12 @@ int FileDecoder::Read(char *outBuffer, size_t size, off_t offset)
     size = std::min<size_t>(std::min<size_t>(size, minBytesRead * sharesRequired - offsetCorrection), Size() - offset);
     for (unsigned int i = 0; i < sharesRequired; ++i) {
         const char* decoded = fecInputIndices[i] < sharesRequired ? fecInputPtrs[i] : fecOutputPtrs[i];
-        if (offsetCorrection > i) decoded++;
-        CopyToNthElement(outBuffer + i - offsetCorrection, outBuffer + size, decoded, sharesRequired);
+        char* out = outBuffer + i - offsetCorrection;
+        if (i < offsetCorrection) {
+            out += sharesRequired;
+            ++decoded;
+        }
+        CopyToNthElement(out, outBuffer + size, decoded, sharesRequired);
     }
     return size;
 }

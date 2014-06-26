@@ -30,8 +30,9 @@ public:
         , fecWrapper(fecWrapper)
     { }
 
-    static FileDecoder* Open(const std::vector<std::string>& encodedFiles,
+    static FileDecoder* Open(const std::vector<boost::shared_ptr<AbstractFile> >& encodedFiles,
                              const FecWrapper& fecWrapper);
+
     off_t Size() const
     {
         return Size(metadata, encodedFileSize);
