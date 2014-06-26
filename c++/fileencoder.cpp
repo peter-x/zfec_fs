@@ -61,14 +61,14 @@ bool FileEncoder::FillData(char*& outBuffer, size_t size, off_t offset)
 
     if (shareIndex < sharesRequired) {
         // TODO can we have compile-time specializations for small required values?
-        outBuffer = CopyNthElement(outBuffer, readBuffer.begin() + shareIndex,
-                                   readBuffer.begin() + shareIndex + sizeRead, sharesRequired);
+        outBuffer = CopyNthElement(outBuffer, readBuffer.data() + shareIndex,
+                                   readBuffer.data() + shareIndex + sizeRead, sharesRequired);
     } else {
         std::vector<char>& workBuffer(threadLocalData.Get().workBuffer);
         workBuffer.resize(sizeRead);
 
-        Distribute(workBuffer.begin(),
-                   readBuffer.begin(), readBuffer.begin() + sizeRead,
+        Distribute(workBuffer.data(),
+                   readBuffer.data(), readBuffer.data() + sizeRead,
                    sharesRequired);
 
         int shareSize = sizeRead / sharesRequired;

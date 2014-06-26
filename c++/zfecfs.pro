@@ -10,7 +10,7 @@ SOURCES += fec.c \
     fileencoder.cpp \
     filedecoder.cpp \
     metadata.cpp
-CCFLAG += --std=c11 -O2
+CCFLAG += --std=c11 -O3
 HEADERS += \
     fec.h \
     decodedpath.h \
